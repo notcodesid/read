@@ -29,6 +29,7 @@ type ArticleRow = {
   source: string | null;
   author: string | null;
   source_url: string | null;
+  hero_image_url: string | null;
   paragraphs: string[];
   added_at: string;
 };
@@ -55,6 +56,7 @@ function mapRow(row: ArticleRow): Article {
     source: row.source ? decodeHtml(row.source) : undefined,
     author: row.author ? decodeHtml(row.author) : undefined,
     sourceUrl: row.source_url ?? undefined,
+    heroImageUrl: row.hero_image_url ?? undefined,
     paragraphs: row.paragraphs.map(decodeHtml),
     addedAt: row.added_at,
   };
@@ -127,7 +129,7 @@ async function fetchArticleViaRest(id: string, signal?: AbortSignal): Promise<Ar
   }
 
   const endpoint =
-    `${url}/rest/v1/articles?select=id,title,category,source,author,source_url,paragraphs,added_at` +
+    `${url}/rest/v1/articles?select=id,title,category,source,author,source_url,hero_image_url,paragraphs,added_at` +
     `&id=eq.${encodeURIComponent(id)}`;
 
   const response = await fetchWithTimeout(endpoint, {
@@ -239,7 +241,7 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
     const started = Date.now();
     const { data, error } = await supabase
       .from('articles')
-      .select('id, title, category, source, author, source_url, paragraphs, added_at')
+      .select('id, title, category, source, author, source_url, hero_image_url, paragraphs, added_at')
       .eq('id', id)
       .maybeSingle();
 

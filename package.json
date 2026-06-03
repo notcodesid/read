@@ -41,8 +41,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "verify:supabase": "node --env-file=.env scripts/verify-supabase.mjs",
@@ -50,7 +50,8 @@
     "import:noah": "node --env-file=.env scripts/import-noah-ideas.mjs",
     "export:summaries": "node --env-file=.env scripts/export-summaries.mjs",
     "export:articles": "node --env-file=.env scripts/export-articles.mjs",
-    "generate:brand-assets": "node scripts/generate-brand-assets.mjs"
+    "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
+    "add:article": "node --env-file=.env scripts/add-article.mjs"
   },
   "private": true
 }

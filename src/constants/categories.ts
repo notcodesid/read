@@ -1,5 +1,6 @@
 /** Display order for Noah Zender idea categories in the library */
 export const CATEGORY_ORDER = [
+  'Saved',
   'Knowledge & Learning',
   'Creativity, Craft & Writing',
   'Product & Startups',

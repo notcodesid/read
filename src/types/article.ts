@@ -8,6 +8,7 @@ export type Article = ArticleSummary & {
   source?: string;
   author?: string;
   sourceUrl?: string;
+  heroImageUrl?: string;
   paragraphs: string[];
   addedAt: string;
 };

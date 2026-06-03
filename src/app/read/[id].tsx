@@ -1,8 +1,10 @@
+import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { getBundledHeroImageSource } from '@/constants/article-images';
 import { ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useArticle } from '@/hooks/use-articles';
 import { useTheme } from '@/hooks/use-theme';
@@ -43,6 +45,8 @@ export default function ReaderScreen() {
   }
 
   const hasBody = article.paragraphs.length > 0;
+  const bundledHero = getBundledHeroImageSource(article.id);
+  const heroSource = bundledHero ?? (article.heroImageUrl ? { uri: article.heroImageUrl } : null);
 
   return (
     <>
@@ -61,6 +65,15 @@ export default function ReaderScreen() {
               {[article.source, article.author].filter(Boolean).join(' · ')}
             </Text>
           )}
+
+          {heroSource ? (
+            <Image
+              source={heroSource}
+              style={styles.heroImage}
+              contentFit="contain"
+              accessibilityLabel={`Illustration for ${article.title}`}
+            />
+          ) : null}
 
           <View style={styles.body}>
             {hasBody ? (
@@ -150,6 +163,12 @@ const styles = StyleSheet.create({
   byline: {
     ...ReadingTypography.meta,
     marginBottom: 22,
+  },
+  heroImage: {
+    width: '100%',
+    aspectRatio: 16 / 10,
+    marginBottom: 22,
+    borderRadius: 4,
   },
   body: {
     gap: 0,
