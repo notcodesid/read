@@ -1,56 +1,110 @@
-# Welcome to your Expo app 👋
+# Read
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A minimal reading app for long-form ideas and essays. Built with Expo and React Native. The library ships with **468 ideas** from [Noah Zender](https://www.noahzender.com/ideas), grouped by category, with full article text available offline.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **Library** — category-grouped list with scrollable header logo
+- **Reader** — serif typography, paper-like light/dark theme, swipe back on iOS
+- **Offline-first** — bundled summaries and full articles; Supabase refresh when online
+- **Branding** — book logo used for app icon, splash, and in-app UI (single SVG source)
 
-   ```bash
-   npm install
-   ```
+## Stack
 
-2. Start the app
+- [Expo SDK 56](https://docs.expo.dev/) + [Expo Router](https://docs.expo.dev/router/introduction/)
+- React Native 0.85, TypeScript, Bun
+- [Supabase](https://supabase.com/) for article storage (public read)
+- EAS Build for iOS TestFlight / App Store
 
-   ```bash
-   npx expo start
-   ```
+## Getting started
 
-In the output, you'll find options to open the app in a
+### Prerequisites
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- [Bun](https://bun.sh/) (or Node 20+)
+- iOS Simulator, Android emulator, or Expo Go for local dev
+- Supabase project (optional for dev — app works offline via bundled JSON)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### Install and run
 
 ```bash
-npm run reset-project
+bun install
+cp .env.example .env
+# Edit .env with your Supabase URL and publishable key
+bun start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Press `i` for iOS simulator or scan the QR code with Expo Go.
 
-### Other setup steps
+### Environment variables
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+| Variable | Where | Purpose |
+|----------|--------|---------|
+| `EXPO_PUBLIC_SUPABASE_URL` | App + scripts | Supabase project URL |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | App + scripts | Public API key (safe in the app) |
+| `SUPABASE_SECRET_KEY` | Scripts only | Never ship in the mobile build |
+| `SUPABASE_DB_URL` | Scripts only | Direct Postgres for import/setup |
 
-## Learn more
+## Project layout
 
-To learn more about developing your project with Expo, look at the following resources:
+```
+src/
+  app/              # Expo Router screens (library, reader)
+  components/       # AppLogo, LaunchSplash
+  constants/        # Reading theme, category order
+  data/             # Bundled article-summaries.json, articles.json
+  hooks/            # useArticles, useArticle
+  lib/              # Supabase client, articles fetch, cache
+scripts/            # Import, export, Supabase setup, brand assets
+supabase/migrations/
+assets/images/      # app-logo.svg (source), generated PNG icons
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Scripts
 
-## Join the community
+| Command | Description |
+|---------|-------------|
+| `bun start` | Start Expo dev server |
+| `bun run lint` | ESLint |
+| `bun run verify:supabase` | Test Supabase connection |
+| `bun run setup:supabase` | Apply migrations + seed |
+| `bun run import:noah` | Scrape and upsert all ideas from noahzender.com |
+| `bun run export:summaries` | Regenerate `src/data/article-summaries.json` |
+| `bun run export:articles` | Regenerate `src/data/articles.json` (~527 KB) |
+| `bun run generate:brand-assets` | Regenerate icons/splash PNGs from `app-logo.svg` |
 
-Join our community of developers creating universal apps.
+After changing content in Supabase, run `export:summaries` and `export:articles` so offline bundles stay in sync.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Brand assets
+
+All platform icons are generated from `assets/images/app-logo.svg`:
+
+```bash
+bun run generate:brand-assets
+```
+
+Then rebuild with EAS if you need a new home-screen icon on device.
+
+## iOS TestFlight (EAS)
+
+1. Register Bundle ID `com.notcodesid.read` in Apple Developer
+2. Create the app in App Store Connect with the same bundle ID
+3. Link the project (once): `eas init`
+4. Set EAS secrets for `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+5. Build and submit:
+
+```bash
+eas build --platform ios --profile production
+eas submit --platform ios --latest
+```
+
+6. Add yourself under **TestFlight → Internal Testing** and install via the TestFlight app
+
+Project: [@notcodesid-2/read](https://expo.dev/accounts/notcodesid-2/projects/read)
+
+## Data model
+
+Table `public.articles`: `id`, `title`, `source`, `author`, `category`, `source_url`, `paragraphs` (jsonb), `added_at`. RLS allows public read.
+
+## License
+
+Private project. Content sourced from Noah Zender’s site for personal reading; respect original attribution and terms when distributing publicly.
