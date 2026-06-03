@@ -37,7 +37,7 @@ for (const { id, url } of SOURCES) {
 
   await sharp(buffer)
     .rotate()
-    .resize(320, 320, { fit: 'cover', position: 'centre' })
+    .resize(360, 480, { fit: 'cover', position: 'centre' })
     .grayscale()
     .normalize()
     .png()

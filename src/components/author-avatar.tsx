@@ -8,18 +8,24 @@ import { useTheme } from '@/hooks/use-theme';
 type AuthorAvatarProps = {
   authorId?: string;
   name: string;
-  size?: number;
+  /** Cover width; height follows 3:4 aspect ratio. */
+  width?: number;
 };
 
-/** Kindle-style square cover thumbnail (not a circle). */
-export function AuthorAvatar({ authorId, name, size = ReadingCover.homeSize }: AuthorAvatarProps) {
+/** Vertical 3:4 cover (Kindle-style), not square or circle. */
+export function AuthorAvatar({
+  authorId,
+  name,
+  width = ReadingCover.tileWidth,
+}: AuthorAvatarProps) {
   const theme = useTheme();
   const imageSource = authorId ? getAuthorAvatarSource(authorId) : undefined;
+  const height = Math.round(width * (4 / 3));
   const radius = ReadingCover.radius;
 
   const frameStyle = {
-    width: size,
-    height: size,
+    width,
+    height,
     borderRadius: radius,
     borderColor: theme.border,
     backgroundColor: theme.backgroundElement,
@@ -30,7 +36,7 @@ export function AuthorAvatar({ authorId, name, size = ReadingCover.homeSize }: A
       <View style={[styles.frame, frameStyle]}>
         <Image
           source={imageSource}
-          style={[styles.photo, { borderRadius: radius - 1 }]}
+          style={[styles.photo, { borderRadius: Math.max(radius - 1, 0) }]}
           contentFit="cover"
           accessibilityLabel={`${name} cover`}
         />
@@ -46,7 +52,7 @@ export function AuthorAvatar({ authorId, name, size = ReadingCover.homeSize }: A
 
   return (
     <View style={[styles.frame, styles.placeholder, frameStyle]}>
-      <Text style={[styles.initials, { color: theme.textSecondary, fontSize: size * 0.3 }]}>
+      <Text style={[styles.initials, { color: theme.textSecondary, fontSize: width * 0.22 }]}>
         {initials}
       </Text>
     </View>

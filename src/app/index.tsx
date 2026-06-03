@@ -1,13 +1,23 @@
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppLogo } from '@/components/app-logo';
 import { AuthorAvatar } from '@/components/author-avatar';
-import { ReadingLayout, ReadingTypography } from '@/constants/reading';
+import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useAuthors } from '@/hooks/use-authors';
 import { useTheme } from '@/hooks/use-theme';
 import type { Author } from '@/types/author';
+
+const TILE_WIDTH = ReadingCover.tileWidth;
+const TILE_GAP = ReadingCover.tileGap;
+const SNAP_INTERVAL = TILE_WIDTH + TILE_GAP;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -16,55 +26,52 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}>
+      <View style={styles.page}>
         <View style={styles.header}>
-          <AppLogo size={44} />
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Your reading shelf
-          </Text>
+          <Text style={[styles.heading, { color: theme.text }]}>Authors</Text>
           {error ? (
-            <View style={styles.status}>
-              <Text style={[styles.statusText, { color: theme.textSecondary }]}>
-                Could not refresh library
-              </Text>
-              <Pressable onPress={refresh} accessibilityRole="button">
-                <Text style={[styles.retry, { color: theme.text }]}>Try again</Text>
-              </Pressable>
-            </View>
+            <Pressable onPress={refresh} accessibilityRole="button">
+              <Text style={[styles.retry, { color: theme.textSecondary }]}>Try again</Text>
+            </Pressable>
           ) : refreshing ? (
-            <ActivityIndicator color={theme.textSecondary} style={styles.spinner} />
+            <ActivityIndicator color={theme.textSecondary} />
           ) : null}
         </View>
 
-        <View style={styles.list}>
-          {authors.map((author) => (
-            <AuthorCard
-              key={author.id}
-              author={author}
-              borderColor={theme.border}
+        <FlatList
+          data={authors}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={SNAP_INTERVAL}
+          snapToAlignment="start"
+          disableIntervalMomentum
+          contentContainerStyle={[
+            styles.carousel,
+            { paddingHorizontal: ReadingLayout.insetX },
+          ]}
+          renderItem={({ item }) => (
+            <AuthorTile
+              author={item}
               textColor={theme.text}
               metaColor={theme.textSecondary}
-              onPress={() => router.push(`/author/${author.id}`)}
+              onPress={() => router.push(`/author/${item.id}`)}
             />
-          ))}
-        </View>
-      </ScrollView>
+          )}
+        />
+      </View>
     </SafeAreaView>
   );
 }
 
-function AuthorCard({
+function AuthorTile({
   author,
-  borderColor,
   textColor,
   metaColor,
   onPress,
 }: {
   author: Author;
-  borderColor: string;
   textColor: string;
   metaColor: string;
   onPress: () => void;
@@ -76,22 +83,18 @@ function AuthorCard({
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Open ${author.name}, ${countLabel}`}
-      style={({ pressed }) => [
-        styles.card,
-        { borderBottomColor: borderColor },
-        pressed && styles.cardPressed,
-      ]}>
-      <AuthorAvatar authorId={author.id} name={author.name} />
-      <View style={styles.cardBody}>
-        <Text style={[styles.cardTitle, { color: textColor }]}>{author.name}</Text>
-        {author.tagline ? (
-          <Text style={[styles.cardTagline, { color: metaColor }]} numberOfLines={2}>
-            {author.tagline}
-          </Text>
-        ) : null}
-        <Text style={[styles.cardMeta, { color: metaColor }]}>{countLabel}</Text>
-      </View>
+      accessibilityLabel={`${author.name}, ${countLabel}`}
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
+      <AuthorAvatar authorId={author.id} name={author.name} width={TILE_WIDTH} />
+      <Text style={[styles.name, { color: textColor }]} numberOfLines={2}>
+        {author.name}
+      </Text>
+      {author.tagline ? (
+        <Text style={[styles.descriptor, { color: metaColor }]} numberOfLines={3}>
+          {author.tagline}
+        </Text>
+      ) : null}
+      <Text style={[styles.count, { color: metaColor }]}>{countLabel}</Text>
     </Pressable>
   );
 }
@@ -100,69 +103,54 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  scroll: {
+  page: {
     flex: 1,
-  },
-  content: {
-    paddingHorizontal: ReadingLayout.insetX,
-    paddingTop: ReadingLayout.insetTop,
-    paddingBottom: ReadingLayout.insetBottom,
-    maxWidth: ReadingLayout.maxWidth,
-    width: '100%',
-    alignSelf: 'center',
+    justifyContent: 'center',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: ReadingLayout.insetX,
     marginBottom: 28,
-    gap: 10,
   },
-  subtitle: {
-    ...ReadingTypography.meta,
-    fontSize: 14,
-  },
-  status: {
-    gap: 8,
-    marginTop: 4,
-  },
-  statusText: {
-    ...ReadingTypography.meta,
+  heading: {
+    fontFamily: ReadingTypography.serif,
+    fontSize: 28,
+    fontWeight: '600',
+    letterSpacing: -0.4,
   },
   retry: {
     fontSize: 14,
     fontWeight: '500',
   },
-  spinner: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
+  carousel: {
+    paddingBottom: ReadingLayout.insetBottom,
   },
-  list: {
-    gap: 0,
+  tile: {
+    width: TILE_WIDTH,
+    marginRight: TILE_GAP,
+    gap: 10,
   },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 16,
-    paddingVertical: 18,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  tilePressed: {
+    opacity: 0.65,
   },
-  cardPressed: {
-    opacity: 0.6,
-  },
-  cardBody: {
-    flex: 1,
-    gap: 4,
-  },
-  cardTitle: {
-    fontSize: 16,
+  name: {
+    fontFamily: ReadingTypography.serif,
+    fontSize: 15,
     fontWeight: '600',
-    letterSpacing: -0.15,
-    lineHeight: 21,
+    lineHeight: 19,
+    letterSpacing: -0.1,
   },
-  cardTagline: {
-    fontSize: 13,
-    lineHeight: 18,
+  descriptor: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.1,
   },
-  cardMeta: {
+  count: {
     ...ReadingTypography.meta,
-    marginTop: 2,
+    fontSize: 11,
+    letterSpacing: 0.2,
+    textTransform: 'uppercase',
   },
 });

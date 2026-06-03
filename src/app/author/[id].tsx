@@ -37,7 +37,7 @@ export default function AuthorScreen() {
         <AuthorAvatar
           authorId={authorId}
           name={author?.name ?? authorId}
-          size={ReadingCover.detailSize}
+          width={ReadingCover.headerWidth}
         />
         <View style={styles.authorMeta}>
           <Text style={[styles.authorName, { color: theme.text }]}>
@@ -46,6 +46,13 @@ export default function AuthorScreen() {
           {author?.tagline ? (
             <Text style={[styles.authorTagline, { color: theme.textSecondary }]}>
               {author.tagline}
+            </Text>
+          ) : null}
+          {author ? (
+            <Text style={[styles.authorCount, { color: theme.textSecondary }]}>
+              {author.articleCount === 1
+                ? '1 piece'
+                : `${author.articleCount} pieces`}
             </Text>
           ) : null}
         </View>
@@ -171,8 +178,16 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   authorTagline: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.1,
+  },
+  authorCount: {
+    ...ReadingTypography.meta,
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.25,
+    marginTop: 4,
   },
   siteLink: {
     ...ReadingTypography.meta,

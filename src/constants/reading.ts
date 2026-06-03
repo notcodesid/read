@@ -49,9 +49,11 @@ export const ReadingLayout = {
   maxWidth: 580,
 } as const;
 
-/** Square cover tiles (Kindle library style). */
+/** Vertical 3:4 cover tiles (Kindle library carousel). */
 export const ReadingCover = {
-  homeSize: 64,
-  detailSize: 72,
-  radius: 6,
+  aspectRatio: 3 / 4,
+  tileWidth: 112,
+  tileGap: 24,
+  radius: 4,
+  headerWidth: 72,
 } as const;
