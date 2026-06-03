@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppLogo } from '@/components/app-logo';
 import { AuthorAvatar } from '@/components/author-avatar';
 import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useAuthors } from '@/hooks/use-authors';
@@ -28,14 +29,17 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={styles.page}>
         <View style={styles.header}>
-          <Text style={[styles.heading, { color: theme.text }]}>Authors</Text>
-          {error ? (
-            <Pressable onPress={refresh} accessibilityRole="button">
-              <Text style={[styles.retry, { color: theme.textSecondary }]}>Try again</Text>
-            </Pressable>
-          ) : refreshing ? (
-            <ActivityIndicator color={theme.textSecondary} />
-          ) : null}
+          <AppLogo size={44} />
+          <View style={styles.headerRow}>
+            <Text style={[styles.heading, { color: theme.text }]}>Authors</Text>
+            {error ? (
+              <Pressable onPress={refresh} accessibilityRole="button">
+                <Text style={[styles.retry, { color: theme.textSecondary }]}>Try again</Text>
+              </Pressable>
+            ) : refreshing ? (
+              <ActivityIndicator color={theme.textSecondary} />
+            ) : null}
+          </View>
         </View>
 
         <FlatList
@@ -108,17 +112,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
+    alignItems: 'center',
+    paddingHorizontal: ReadingLayout.insetX,
+    marginBottom: 28,
+    gap: 16,
+  },
+  headerRow: {
+    alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: ReadingLayout.insetX,
-    marginBottom: 28,
   },
   heading: {
     fontFamily: ReadingTypography.serif,
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '600',
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   retry: {
     fontSize: 14,
