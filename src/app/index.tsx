@@ -1,4 +1,3 @@
-import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,12 +47,7 @@ export default function HomeScreen() {
               borderColor={theme.border}
               textColor={theme.text}
               metaColor={theme.textSecondary}
-              onOpenShelf={() => router.push(`/author/${author.id}`)}
-              onOpenSite={
-                author.siteUrl
-                  ? () => WebBrowser.openBrowserAsync(author.siteUrl!)
-                  : undefined
-              }
+              onPress={() => router.push(`/author/${author.id}`)}
             />
           ))}
         </View>
@@ -67,48 +61,38 @@ function AuthorCard({
   borderColor,
   textColor,
   metaColor,
-  onOpenShelf,
-  onOpenSite,
+  onPress,
 }: {
   author: Author;
   borderColor: string;
   textColor: string;
   metaColor: string;
-  onOpenShelf: () => void;
-  onOpenSite?: () => void;
+  onPress: () => void;
 }) {
   const countLabel =
     author.articleCount === 1 ? '1 piece' : `${author.articleCount} pieces`;
 
   return (
-    <View style={[styles.card, { borderBottomColor: borderColor }]}>
-      <Pressable
-        onPress={onOpenShelf}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${author.name}, ${countLabel}`}
-        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}>
-        <AuthorAvatar name={author.name} size={48} />
-        <View style={styles.cardBody}>
-          <Text style={[styles.cardTitle, { color: textColor }]}>{author.name}</Text>
-          {author.tagline ? (
-            <Text style={[styles.cardTagline, { color: metaColor }]} numberOfLines={2}>
-              {author.tagline}
-            </Text>
-          ) : null}
-          <Text style={[styles.cardMeta, { color: metaColor }]}>{countLabel}</Text>
-        </View>
-      </Pressable>
-      {onOpenSite ? (
-        <Pressable
-          onPress={onOpenSite}
-          hitSlop={8}
-          accessibilityRole="link"
-          accessibilityLabel={`Visit ${author.name} website`}
-          style={({ pressed }) => pressed && styles.cardPressed}>
-          <Text style={[styles.siteLink, { color: metaColor }]}>Web</Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${author.name}, ${countLabel}`}
+      style={({ pressed }) => [
+        styles.card,
+        { borderBottomColor: borderColor },
+        pressed && styles.cardPressed,
+      ]}>
+      <AuthorAvatar name={author.name} size={48} />
+      <View style={styles.cardBody}>
+        <Text style={[styles.cardTitle, { color: textColor }]}>{author.name}</Text>
+        {author.tagline ? (
+          <Text style={[styles.cardTagline, { color: metaColor }]} numberOfLines={2}>
+            {author.tagline}
+          </Text>
+        ) : null}
+        <Text style={[styles.cardMeta, { color: metaColor }]}>{countLabel}</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -156,14 +140,9 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  cardMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 14,
     paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   cardPressed: {
     opacity: 0.6,
@@ -184,10 +163,5 @@ const styles = StyleSheet.create({
   cardMeta: {
     ...ReadingTypography.meta,
     marginTop: 2,
-  },
-  siteLink: {
-    fontSize: 12,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
   },
 });
