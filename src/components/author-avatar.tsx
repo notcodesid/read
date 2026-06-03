@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { getAuthorAvatarSource } from '@/constants/author-avatars';
+import { ReadingCover } from '@/constants/reading';
 import { useTheme } from '@/hooks/use-theme';
 
 type AuthorAvatarProps = {
@@ -10,26 +11,30 @@ type AuthorAvatarProps = {
   size?: number;
 };
 
-export function AuthorAvatar({ authorId, name, size = 44 }: AuthorAvatarProps) {
+/** Kindle-style square cover thumbnail (not a circle). */
+export function AuthorAvatar({ authorId, name, size = ReadingCover.homeSize }: AuthorAvatarProps) {
   const theme = useTheme();
   const imageSource = authorId ? getAuthorAvatarSource(authorId) : undefined;
-  const radius = size / 2;
+  const radius = ReadingCover.radius;
+
+  const frameStyle = {
+    width: size,
+    height: size,
+    borderRadius: radius,
+    borderColor: theme.border,
+    backgroundColor: theme.backgroundElement,
+  };
 
   if (imageSource) {
     return (
-      <Image
-        source={imageSource}
-        style={[
-          styles.photo,
-          {
-            width: size,
-            height: size,
-            borderRadius: radius,
-          },
-        ]}
-        contentFit="cover"
-        accessibilityLabel={`${name} portrait`}
-      />
+      <View style={[styles.frame, frameStyle]}>
+        <Image
+          source={imageSource}
+          style={[styles.photo, { borderRadius: radius - 1 }]}
+          contentFit="cover"
+          accessibilityLabel={`${name} cover`}
+        />
+      </View>
     );
   }
 
@@ -40,17 +45,8 @@ export function AuthorAvatar({ authorId, name, size = 44 }: AuthorAvatarProps) {
     .join('');
 
   return (
-    <View
-      style={[
-        styles.avatar,
-        {
-          width: size,
-          height: size,
-          borderRadius: radius,
-          backgroundColor: theme.backgroundSelected,
-        },
-      ]}>
-      <Text style={[styles.initials, { color: theme.text, fontSize: size * 0.34 }]}>
+    <View style={[styles.frame, styles.placeholder, frameStyle]}>
+      <Text style={[styles.initials, { color: theme.textSecondary, fontSize: size * 0.3 }]}>
         {initials}
       </Text>
     </View>
@@ -58,15 +54,20 @@ export function AuthorAvatar({ authorId, name, size = 44 }: AuthorAvatarProps) {
 }
 
 const styles = StyleSheet.create({
-  photo: {
-    backgroundColor: '#e8e2d9',
+  frame: {
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  avatar: {
+  photo: {
+    width: '100%',
+    height: '100%',
+  },
+  placeholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
   initials: {
     fontWeight: '600',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
 });

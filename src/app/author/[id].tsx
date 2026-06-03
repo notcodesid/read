@@ -4,7 +4,7 @@ import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthorAvatar } from '@/components/author-avatar';
-import { ReadingLayout, ReadingTypography } from '@/constants/reading';
+import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useAuthorArticles } from '@/hooks/use-articles';
 import { useTheme } from '@/hooks/use-theme';
 import type { ArticleSummary } from '@/types/article';
@@ -34,7 +34,11 @@ export default function AuthorScreen() {
         <Text style={[styles.back, { color: theme.textSecondary }]}>← Authors</Text>
       </Pressable>
       <View style={styles.authorRow}>
-        <AuthorAvatar authorId={authorId} name={author?.name ?? authorId} size={52} />
+        <AuthorAvatar
+          authorId={authorId}
+          name={author?.name ?? authorId}
+          size={ReadingCover.detailSize}
+        />
         <View style={styles.authorMeta}>
           <Text style={[styles.authorName, { color: theme.text }]}>
             {author?.name ?? authorId}
@@ -154,8 +158,8 @@ const styles = StyleSheet.create({
   },
   authorRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    alignItems: 'flex-start',
+    gap: 16,
   },
   authorMeta: {
     flex: 1,

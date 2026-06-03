@@ -48,3 +48,10 @@ export const ReadingLayout = {
   insetBottom: 48,
   maxWidth: 580,
 } as const;
+
+/** Square cover tiles (Kindle library style). */
+export const ReadingCover = {
+  homeSize: 64,
+  detailSize: 72,
+  radius: 6,
+} as const;

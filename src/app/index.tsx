@@ -82,7 +82,7 @@ function AuthorCard({
         { borderBottomColor: borderColor },
         pressed && styles.cardPressed,
       ]}>
-      <AuthorAvatar authorId={author.id} name={author.name} size={48} />
+      <AuthorAvatar authorId={author.id} name={author.name} />
       <View style={styles.cardBody}>
         <Text style={[styles.cardTitle, { color: textColor }]}>{author.name}</Text>
         {author.tagline ? (
@@ -139,9 +139,9 @@ const styles = StyleSheet.create({
   },
   card: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 16,
+    alignItems: 'flex-start',
+    gap: 16,
+    paddingVertical: 18,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   cardPressed: {
@@ -152,9 +152,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: -0.2,
+    letterSpacing: -0.15,
+    lineHeight: 21,
   },
   cardTagline: {
     fontSize: 13,
