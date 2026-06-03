@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -10,45 +10,28 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
-import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
-import { BlogTopicRow } from '@/components/home/blog-topic-row';
-import {
-  GLASS_BROWSE_DOCK_SCROLL_PADDING,
-  GlassBrowseDock,
-} from '@/components/home/glass-browse-dock';
-import { ReadingLayout, ReadingTypography } from '@/constants/reading';
-import { useHomeBrowse } from '@/hooks/use-home-browse';
+import { AuthorAvatar } from '@/components/author-avatar';
+import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
+import { useAuthors } from '@/hooks/use-authors';
 import { useTheme } from '@/hooks/use-theme';
+import type { Author } from '@/types/author';
+
+const TILE_WIDTH = ReadingCover.tileWidth;
+const TILE_GAP = ReadingCover.tileGap;
+const SNAP_INTERVAL = TILE_WIDTH + TILE_GAP;
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const {
-    mode,
-    setMode,
-    authorSections,
-    blogSections,
-    ungroupedAuthors,
-    refreshing,
-    error,
-    refresh,
-  } = useHomeBrowse();
-
-  const heading = mode === 'authors' ? 'By author' : 'By topic';
+  const { authors, refreshing, error, refresh } = useAuthors();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: GLASS_BROWSE_DOCK_SCROLL_PADDING },
-        ]}
-        showsVerticalScrollIndicator={false}>
+      <View style={styles.page}>
         <View style={styles.header}>
           <AppLogo size={56} />
           <View style={styles.headerRow}>
-            <Text style={[styles.heading, { color: theme.text }]}>{heading}</Text>
+            <Text style={[styles.heading, { color: theme.text }]}>Authors</Text>
             {error ? (
               <Pressable onPress={refresh} accessibilityRole="button">
                 <Text style={[styles.retry, { color: theme.textSecondary }]}>Try again</Text>
@@ -59,69 +42,61 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {mode === 'authors' ? (
-          <View>
-            {authorSections.map((section) => (
-              <AuthorGroupCarousel
-                key={section.group.id}
-                group={section.group}
-                authors={section.authors}
+        <View style={styles.carouselWrap}>
+          <FlatList
+            data={authors}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={SNAP_INTERVAL}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            contentContainerStyle={[
+              styles.carousel,
+              { paddingHorizontal: ReadingLayout.insetX },
+            ]}
+            renderItem={({ item }) => (
+              <AuthorTile
+                author={item}
                 textColor={theme.text}
-                metaColor={theme.textSecondary}
-                onAuthorPress={(authorId) => router.push(`/author/${authorId}`)}
+                onPress={() => router.push(`/author/${item.id}`)}
               />
-            ))}
-            {ungroupedAuthors.length > 0 ? (
-              <AuthorGroupCarousel
-                group={{
-                  id: 'other',
-                  name: 'More voices',
-                  description: 'Writers not yet assigned to a shelf',
-                  sortOrder: 99,
-                }}
-                authors={ungroupedAuthors}
-                textColor={theme.text}
-                metaColor={theme.textSecondary}
-                onAuthorPress={(authorId) => router.push(`/author/${authorId}`)}
-              />
-            ) : null}
-            {authorSections.length === 0 && !refreshing ? (
-              <Text style={[styles.empty, { color: theme.textSecondary }]}>
-                No authors yet. Add writers in Supabase and assign an author group.
-              </Text>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.blogList}>
-            {blogSections.map((section) => (
-              <BlogTopicRow
-                key={section.topic.id}
-                topic={section.topic}
-                previewTitles={section.previewTitles}
-                textColor={theme.text}
-                metaColor={theme.textSecondary}
-                borderColor={theme.border}
-                onPress={() => router.push(`/topic/${section.topic.id}`)}
-              />
-            ))}
-            {blogSections.length === 0 && !refreshing ? (
-              <Text style={[styles.empty, { color: theme.textSecondary }]}>
-                No topics with articles yet.
-              </Text>
-            ) : null}
-          </View>
-        )}
-      </ScrollView>
-
-      <GlassBrowseDock
-        mode={mode}
-        onChange={setMode}
-        textColor={theme.text}
-        metaColor={theme.textSecondary}
-        surfaceColor={theme.backgroundSelected}
-        borderColor={theme.border}
-      />
+            )}
+            ListEmptyComponent={
+              !refreshing ? (
+                <Text style={[styles.empty, { color: theme.textSecondary }]}>
+                  No authors yet.
+                </Text>
+              ) : null
+            }
+          />
+        </View>
+      </View>
     </SafeAreaView>
+  );
+}
+
+function AuthorTile({
+  author,
+  textColor,
+  onPress,
+}: {
+  author: Author;
+  textColor: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={author.name}
+      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
+      <AuthorAvatar authorId={author.id} name={author.name} width={TILE_WIDTH} />
+      <Text style={[styles.name, { color: textColor }]} numberOfLines={2}>
+        {author.name}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -129,18 +104,19 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  scroll: {
+  page: {
     flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
   },
   header: {
     alignItems: 'center',
     paddingHorizontal: ReadingLayout.insetX,
     paddingTop: 8,
     paddingBottom: 20,
-    gap: 12,
+    gap: 20,
+  },
+  carouselWrap: {
+    flex: 1,
+    justifyContent: 'center',
   },
   headerRow: {
     alignSelf: 'stretch',
@@ -158,13 +134,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  blogList: {
-    paddingHorizontal: ReadingLayout.insetX,
+  carousel: {
+    paddingBottom: ReadingLayout.insetBottom,
+  },
+  tile: {
+    width: TILE_WIDTH,
+    marginRight: TILE_GAP,
+    gap: 8,
+  },
+  tilePressed: {
+    opacity: 0.65,
+  },
+  name: {
+    fontFamily: ReadingTypography.serif,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 19,
+    letterSpacing: -0.1,
   },
   empty: {
     ...ReadingTypography.meta,
-    textAlign: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: ReadingLayout.insetX,
+    paddingVertical: 24,
   },
 });

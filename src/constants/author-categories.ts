@@ -1,5 +1,3 @@
-import bundledSummaries from '@/data/article-summaries.json';
-
 /** Category display order per author (their own taxonomy). */
 export const AUTHOR_CATEGORY_ORDER: Record<string, readonly string[]> = {
   'paul-graham': ['Essays'],
@@ -42,24 +40,3 @@ export function sortSectionsForAuthor<T extends { category: string }>(
   });
 }
 
-type SummaryRow = { author_id: string; category: string | null };
-
-/** Categories to show on the home author shelf (from bundled library). */
-export function getAuthorShelfCategories(authorId: string): string[] {
-  const fromArticles = new Set<string>();
-
-  for (const row of bundledSummaries as SummaryRow[]) {
-    if (row.author_id === authorId && row.category) {
-      fromArticles.add(row.category);
-    }
-  }
-
-  if (fromArticles.size > 0) {
-    return sortSectionsForAuthor(
-      authorId,
-      [...fromArticles].map((category) => ({ category })),
-    ).map((section) => section.category);
-  }
-
-  return [...(AUTHOR_CATEGORY_ORDER[authorId] ?? [])];
-}

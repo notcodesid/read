@@ -47,10 +47,6 @@ export default function RootLayout() {
             options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
           />
           <Stack.Screen
-            name="topic/[id]"
-            options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
-          />
-          <Stack.Screen
             name="read/[id]"
             options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
           />
