@@ -1,6 +1,7 @@
 export type ArticleSummary = {
   id: string;
   title: string;
+  authorId: string;
   category?: string;
 };
 

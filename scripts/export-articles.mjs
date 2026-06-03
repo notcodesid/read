@@ -27,7 +27,7 @@ if (!url || !key) {
 const supabase = createClient(url, key);
 const { data, error } = await supabase
   .from('articles')
-  .select('id, title, category, source, author, source_url, hero_image_url, paragraphs, added_at')
+  .select('id, title, author_id, category, source, author, source_url, hero_image_url, paragraphs, added_at')
   .order('id', { ascending: true });
 
 if (error) {

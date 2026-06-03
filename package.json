@@ -48,6 +48,7 @@
     "verify:supabase": "node --env-file=.env scripts/verify-supabase.mjs",
     "setup:supabase": "node --env-file=.env scripts/setup-supabase.mjs",
     "import:noah": "node --env-file=.env scripts/import-noah-ideas.mjs",
+    "export:authors": "node --env-file=.env scripts/export-authors.mjs",
     "export:summaries": "node --env-file=.env scripts/export-summaries.mjs",
     "export:articles": "node --env-file=.env scripts/export-articles.mjs",
     "generate:brand-assets": "node scripts/generate-brand-assets.mjs",

@@ -1,94 +1,114 @@
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
-import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
+import { AuthorAvatar } from '@/components/author-avatar';
 import { ReadingLayout, ReadingTypography } from '@/constants/reading';
-import { useArticles } from '@/hooks/use-articles';
+import { useAuthors } from '@/hooks/use-authors';
 import { useTheme } from '@/hooks/use-theme';
-import type { ArticleSummary } from '@/types/article';
+import type { Author } from '@/types/author';
 
-export default function LibraryScreen() {
+export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { sections, refreshing, error, refresh } = useArticles();
-  const listSections = sections.map((section) => ({
-    title: section.category,
-    data: section.articles,
-  }));
-
-  const listHeader = (
-    <View style={styles.header}>
-      <AppLogo size={44} />
-      {error ? (
-        <View style={styles.status}>
-          <Text style={[styles.statusText, { color: theme.textSecondary }]}>
-            Could not refresh library
-          </Text>
-          <Pressable onPress={refresh} accessibilityRole="button" accessibilityLabel="Try again">
-            <Text style={[styles.retry, { color: theme.text }]}>Try again</Text>
-          </Pressable>
-        </View>
-      ) : refreshing ? (
-        <Text style={[styles.statusText, { color: theme.textSecondary }]}>Updating…</Text>
-      ) : null}
-    </View>
-  );
+  const { authors, refreshing, error, refresh } = useAuthors();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <SectionList
-        sections={listSections}
-        keyExtractor={(item) => item.id}
-        stickySectionHeadersEnabled={false}
-        showsVerticalScrollIndicator
-        style={styles.sectionList}
-        contentContainerStyle={styles.sectionListContent}
-        ListHeaderComponent={listHeader}
-        renderSectionHeader={({ section }) => (
-          <Text style={[styles.categoryLabel, { color: theme.textSecondary }]}>
-            {section.title} · {section.data.length}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <AppLogo size={44} />
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            Your reading shelf
           </Text>
-        )}
-        renderItem={({ item }) => (
-          <ArticleRow
-            article={item}
-            borderColor={theme.border}
-            textColor={theme.text}
-            onPress={() => router.push(`/read/${item.id}`)}
-          />
-        )}
-        SectionSeparatorComponent={() => <View style={styles.sectionGap} />}
-      />
+          {error ? (
+            <View style={styles.status}>
+              <Text style={[styles.statusText, { color: theme.textSecondary }]}>
+                Could not refresh library
+              </Text>
+              <Pressable onPress={refresh} accessibilityRole="button">
+                <Text style={[styles.retry, { color: theme.text }]}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : refreshing ? (
+            <ActivityIndicator color={theme.textSecondary} style={styles.spinner} />
+          ) : null}
+        </View>
+
+        <View style={styles.list}>
+          {authors.map((author) => (
+            <AuthorCard
+              key={author.id}
+              author={author}
+              borderColor={theme.border}
+              textColor={theme.text}
+              metaColor={theme.textSecondary}
+              onOpenShelf={() => router.push(`/author/${author.id}`)}
+              onOpenSite={
+                author.siteUrl
+                  ? () => WebBrowser.openBrowserAsync(author.siteUrl!)
+                  : undefined
+              }
+            />
+          ))}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-function ArticleRow({
-  article,
+function AuthorCard({
+  author,
   borderColor,
   textColor,
-  onPress,
+  metaColor,
+  onOpenShelf,
+  onOpenSite,
 }: {
-  article: ArticleSummary;
+  author: Author;
   borderColor: string;
   textColor: string;
-  onPress: () => void;
+  metaColor: string;
+  onOpenShelf: () => void;
+  onOpenSite?: () => void;
 }) {
+  const countLabel =
+    author.articleCount === 1 ? '1 piece' : `${author.articleCount} pieces`;
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={article.title}
-      style={({ pressed }) => [
-        styles.row,
-        { borderBottomColor: borderColor },
-        pressed && styles.rowPressed,
-      ]}>
-      <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
-        {article.title}
-      </Text>
-    </Pressable>
+    <View style={[styles.card, { borderBottomColor: borderColor }]}>
+      <Pressable
+        onPress={onOpenShelf}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${author.name}, ${countLabel}`}
+        style={({ pressed }) => [styles.cardMain, pressed && styles.cardPressed]}>
+        <AuthorAvatar name={author.name} size={48} />
+        <View style={styles.cardBody}>
+          <Text style={[styles.cardTitle, { color: textColor }]}>{author.name}</Text>
+          {author.tagline ? (
+            <Text style={[styles.cardTagline, { color: metaColor }]} numberOfLines={2}>
+              {author.tagline}
+            </Text>
+          ) : null}
+          <Text style={[styles.cardMeta, { color: metaColor }]}>{countLabel}</Text>
+        </View>
+      </Pressable>
+      {onOpenSite ? (
+        <Pressable
+          onPress={onOpenSite}
+          hitSlop={8}
+          accessibilityRole="link"
+          accessibilityLabel={`Visit ${author.name} website`}
+          style={({ pressed }) => pressed && styles.cardPressed}>
+          <Text style={[styles.siteLink, { color: metaColor }]}>Web</Text>
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -96,24 +116,28 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  sectionList: {
+  scroll: {
     flex: 1,
+  },
+  content: {
+    paddingHorizontal: ReadingLayout.insetX,
+    paddingTop: ReadingLayout.insetTop,
+    paddingBottom: ReadingLayout.insetBottom,
     maxWidth: ReadingLayout.maxWidth,
     width: '100%',
     alignSelf: 'center',
   },
-  sectionListContent: {
-    paddingHorizontal: ReadingLayout.insetX,
-    paddingTop: ReadingLayout.insetTop,
-    paddingBottom: ReadingLayout.insetBottom,
-  },
   header: {
-    marginBottom: 20,
+    marginBottom: 28,
     gap: 10,
   },
+  subtitle: {
+    ...ReadingTypography.meta,
+    fontSize: 14,
+  },
   status: {
-    gap: 12,
-    marginTop: 8,
+    gap: 8,
+    marginTop: 4,
   },
   statusText: {
     ...ReadingTypography.meta,
@@ -122,27 +146,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  categoryLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginBottom: 8,
+  spinner: {
+    alignSelf: 'flex-start',
     marginTop: 4,
   },
-  sectionGap: {
-    height: 20,
+  list: {
+    gap: 0,
   },
-  row: {
-    paddingVertical: 14,
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  rowPressed: {
+  cardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 16,
+  },
+  cardPressed: {
     opacity: 0.6,
   },
-  title: {
-    fontSize: 15,
+  cardBody: {
+    flex: 1,
+    gap: 4,
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  cardTagline: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  cardMeta: {
+    ...ReadingTypography.meta,
+    marginTop: 2,
+  },
+  siteLink: {
+    fontSize: 12,
     fontWeight: '500',
-    lineHeight: 20,
+    textDecorationLine: 'underline',
   },
 });

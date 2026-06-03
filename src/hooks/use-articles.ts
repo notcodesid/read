@@ -1,76 +1,60 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import { getBundledAuthor } from '@/lib/authors';
 import {
   fetchArticleById,
   fetchArticleSummaries,
   getBundledArticle,
   getBundledSummaries,
   groupArticlesByCategory,
-  type ArticlesLoadSource,
 } from '@/lib/articles';
-import { devLog, devWarn } from '@/lib/log';
+import { devWarn } from '@/lib/log';
 import type { Article, ArticleSection } from '@/types/article';
 
-const LOG = '[read:useArticles]';
-
-export function useArticles() {
-  const [sections, setSections] = useState<ArticleSection[]>(() =>
-    groupArticlesByCategory(getBundledSummaries()),
-  );
+export function useAuthorArticles(authorId: string | undefined) {
+  const [sections, setSections] = useState<ArticleSection[]>([]);
   const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<ArticlesLoadSource | null>('bundled');
-  const requestId = useRef(0);
 
   const load = useCallback(async () => {
-    const id = ++requestId.current;
-    const controller = new AbortController();
+    if (!authorId) {
+      setSections([]);
+      setRefreshing(false);
+      return;
+    }
 
-    devLog(LOG, 'refresh start', { id });
     setRefreshing(true);
     setError(null);
 
     try {
-      const result = await fetchArticleSummaries(controller.signal);
-
-      if (id !== requestId.current) {
-        devLog(LOG, 'refresh stale, ignoring', { id });
-        return;
-      }
-
-      setSections(groupArticlesByCategory(result.articles));
-      setSource(result.source);
-      devLog(LOG, 'refresh success', {
-        id,
-        articles: result.articles.length,
-        source: result.source,
-      });
+      const result = await fetchArticleSummaries(authorId);
+      setSections(groupArticlesByCategory(authorId, result.articles));
     } catch (err) {
-      if (id !== requestId.current) {
-        return;
-      }
-
       const message = err instanceof Error ? err.message : 'Failed to load articles';
-      if (message.includes('canceled') || message.includes('Canceled')) {
-        devLog(LOG, 'refresh canceled', { id });
-        return;
+      if (!message.includes('canceled') && !message.includes('Canceled')) {
+        devWarn('[read:useAuthorArticles]', authorId, err);
+        setError(message);
+        setSections(groupArticlesByCategory(authorId, getBundledSummaries(authorId)));
       }
-
-      devWarn(LOG, 'refresh failed, keeping bundled list', err);
-      setError(message);
     } finally {
-      if (id === requestId.current) {
-        setRefreshing(false);
-        devLog(LOG, 'refresh end', { id });
-      }
+      setRefreshing(false);
     }
-  }, []);
+  }, [authorId]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!authorId) {
+      setSections([]);
+      setRefreshing(false);
+      return;
+    }
 
-  return { sections, refreshing, error, source, refresh: load };
+    setSections(groupArticlesByCategory(authorId, getBundledSummaries(authorId)));
+    load();
+  }, [authorId, load]);
+
+  const author = authorId ? getBundledAuthor(authorId) : undefined;
+
+  return { author, sections, refreshing, error, refresh: load };
 }
 
 export function useArticle(articleId: string | undefined) {
@@ -114,7 +98,7 @@ export function useArticle(articleId: string | undefined) {
       if (message.includes('canceled') || message.includes('Canceled')) {
         return;
       }
-      devWarn(LOG, 'article load failed', articleId, err);
+      devWarn('[read:useArticle]', articleId, err);
       if (!bundled) {
         setError(message);
         setArticle(null);

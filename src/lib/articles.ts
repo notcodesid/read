@@ -1,6 +1,6 @@
 import bundledArticles from '@/data/articles.json';
 import bundledSummaries from '@/data/article-summaries.json';
-import { sortCategorySections } from '@/constants/categories';
+import { sortSectionsForAuthor } from '@/constants/author-categories';
 import {
   loadArticleCache,
   loadArticleSummariesCache,
@@ -25,6 +25,7 @@ export type ArticlesLoadResult = {
 type ArticleRow = {
   id: string;
   title: string;
+  author_id: string;
   category: string | null;
   source: string | null;
   author: string | null;
@@ -37,6 +38,7 @@ type ArticleRow = {
 type SummaryRow = {
   id: string;
   title: string;
+  author_id: string;
   category: string | null;
 };
 
@@ -44,6 +46,7 @@ function mapSummary(row: SummaryRow): ArticleSummary {
   return {
     id: row.id,
     title: decodeHtml(row.title),
+    authorId: row.author_id,
     category: row.category ? decodeHtml(row.category) : undefined,
   };
 }
@@ -52,6 +55,7 @@ function mapRow(row: ArticleRow): Article {
   return {
     id: row.id,
     title: decodeHtml(row.title),
+    authorId: row.author_id,
     category: row.category ? decodeHtml(row.category) : undefined,
     source: row.source ? decodeHtml(row.source) : undefined,
     author: row.author ? decodeHtml(row.author) : undefined,
@@ -70,32 +74,41 @@ const bundledArticleById = new Map(
   (bundledArticles as ArticleRow[]).map((row) => [row.id, mapRow(row)]),
 );
 
-function loadBundledSummaries(): ArticleSummary[] {
-  const rows = bundledSummaries as SummaryRow[];
-  return rows.map(mapSummary);
+const bundledSummariesAll = (bundledSummaries as SummaryRow[]).map(mapSummary);
+
+function loadBundledSummaries(authorId?: string): ArticleSummary[] {
+  if (!authorId) {
+    return bundledSummariesAll;
+  }
+  return bundledSummariesAll.filter((article) => article.authorId === authorId);
 }
 
-/** Synchronous bundled library — available on first frame. */
-export function getBundledSummaries(): ArticleSummary[] {
-  return loadBundledSummaries();
+export function getBundledSummaries(authorId?: string): ArticleSummary[] {
+  return loadBundledSummaries(authorId);
 }
 
-/** Synchronous bundled article body for instant reader open. */
 export function getBundledArticle(id: string): Article | null {
   return bundledArticleById.get(id) ?? null;
 }
 
-async function fetchSummariesViaRest(signal?: AbortSignal): Promise<ArticleSummary[]> {
+async function fetchSummariesViaRest(
+  authorId?: string,
+  signal?: AbortSignal,
+): Promise<ArticleSummary[]> {
   const { url, key } = getSupabaseConfig();
   if (!url || !key) {
     throw new Error('Missing Supabase env vars');
   }
 
-  const endpoint =
-    `${url}/rest/v1/articles?select=id,title,category` +
+  let endpoint =
+    `${url}/rest/v1/articles?select=id,title,author_id,category` +
     '&order=category.asc&order=title.asc';
 
-  devLog(LOG, 'REST fetch start');
+  if (authorId) {
+    endpoint += `&author_id=eq.${encodeURIComponent(authorId)}`;
+  }
+
+  devLog(LOG, 'REST fetch start', { authorId });
   const started = Date.now();
 
   const response = await fetchWithTimeout(endpoint, {
@@ -129,7 +142,7 @@ async function fetchArticleViaRest(id: string, signal?: AbortSignal): Promise<Ar
   }
 
   const endpoint =
-    `${url}/rest/v1/articles?select=id,title,category,source,author,source_url,hero_image_url,paragraphs,added_at` +
+    `${url}/rest/v1/articles?select=id,title,author_id,category,source,author,source_url,hero_image_url,paragraphs,added_at` +
     `&id=eq.${encodeURIComponent(id)}`;
 
   const response = await fetchWithTimeout(endpoint, {
@@ -154,11 +167,11 @@ async function fetchArticleViaRest(id: string, signal?: AbortSignal): Promise<Ar
   return mapRow(rows[0]);
 }
 
-/** Tries network (with retries), then device cache, then bundled JSON. */
 export async function fetchArticleSummaries(
+  authorId?: string,
   signal?: AbortSignal,
 ): Promise<ArticlesLoadResult> {
-  devLog(LOG, 'fetchArticleSummaries start');
+  devLog(LOG, 'fetchArticleSummaries start', { authorId });
 
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     if (signal?.aborted) {
@@ -167,8 +180,10 @@ export async function fetchArticleSummaries(
 
     try {
       devLog(LOG, `network attempt ${attempt}/${RETRY_ATTEMPTS}`);
-      const articles = await fetchSummariesViaRest(signal);
-      await saveArticleSummariesCache(articles);
+      const articles = await fetchSummariesViaRest(authorId, signal);
+      if (!authorId) {
+        await saveArticleSummariesCache(articles);
+      }
       devLog(LOG, 'fetchArticleSummaries done (network)', { total: articles.length });
       return { articles, source: 'network' };
     } catch (err) {
@@ -180,18 +195,23 @@ export async function fetchArticleSummaries(
     }
   }
 
-  const cached = await loadArticleSummariesCache();
-  if (cached && cached.length > 0) {
-    devLog(LOG, 'fetchArticleSummaries done (cache)', { total: cached.length });
-    return { articles: cached, source: 'cache' };
+  if (!authorId) {
+    const cached = await loadArticleSummariesCache();
+    if (cached && cached.length > 0 && cached[0]?.authorId) {
+      devLog(LOG, 'fetchArticleSummaries done (cache)', { total: cached.length });
+      return { articles: cached, source: 'cache' };
+    }
   }
 
-  const bundled = loadBundledSummaries();
+  const bundled = loadBundledSummaries(authorId);
   devLog(LOG, 'fetchArticleSummaries done (bundled)', { total: bundled.length });
   return { articles: bundled, source: 'bundled' };
 }
 
-export function groupArticlesByCategory(articles: ArticleSummary[]): ArticleSection[] {
+export function groupArticlesByCategory(
+  authorId: string,
+  articles: ArticleSummary[],
+): ArticleSection[] {
   const map = new Map<string, ArticleSummary[]>();
 
   for (const article of articles) {
@@ -206,7 +226,7 @@ export function groupArticlesByCategory(articles: ArticleSummary[]): ArticleSect
     articles: sectionArticles.sort((a, b) => a.title.localeCompare(b.title)),
   }));
 
-  return sortCategorySections(sections);
+  return sortSectionsForAuthor(authorId, sections);
 }
 
 export async function fetchArticleById(id: string, signal?: AbortSignal): Promise<Article | null> {
@@ -241,7 +261,9 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
     const started = Date.now();
     const { data, error } = await supabase
       .from('articles')
-      .select('id, title, category, source, author, source_url, hero_image_url, paragraphs, added_at')
+      .select(
+        'id, title, author_id, category, source, author, source_url, hero_image_url, paragraphs, added_at',
+      )
       .eq('id', id)
       .maybeSingle();
 

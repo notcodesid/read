@@ -123,6 +123,7 @@ async function fetchArticle(slug, category) {
   return {
     id: slug,
     title,
+    author_id: 'noah-zender',
     category,
     source: SOURCE,
     author: SOURCE,
@@ -209,10 +210,11 @@ try {
   for (const article of articles) {
     await client.query(
       `insert into public.articles (
-        id, title, source, author, category, source_url, paragraphs, added_at
-      ) values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::date)
+        id, title, author_id, source, author, category, source_url, paragraphs, added_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::date)
       on conflict (id) do update set
         title = excluded.title,
+        author_id = excluded.author_id,
         source = excluded.source,
         author = excluded.author,
         category = excluded.category,
@@ -222,6 +224,7 @@ try {
       [
         article.id,
         article.title,
+        article.author_id,
         article.source,
         article.author,
         article.category,

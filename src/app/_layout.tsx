@@ -43,6 +43,10 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
           <Stack.Screen name="index" />
           <Stack.Screen
+            name="author/[id]"
+            options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          <Stack.Screen
             name="read/[id]"
             options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
           />

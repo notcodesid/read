@@ -4,7 +4,8 @@ A minimal reading app for long-form ideas and essays. Built with Expo and React 
 
 ## Features
 
-- **Library** — category-grouped list with scrollable header logo
+- **Home** — author shelf (Noah Zender, Dan Koe, …) with piece counts and web links
+- **Author view** — that writer’s articles grouped by their categories
 - **Reader** — serif typography, paper-like light/dark theme, swipe back on iOS
 - **Offline-first** — bundled summaries and full articles; Supabase refresh when online
 - **Branding** — book logo used for app icon, splash, and in-app UI (single SVG source)
@@ -48,10 +49,10 @@ Press `i` for iOS simulator or scan the QR code with Expo Go.
 
 ```
 src/
-  app/              # Expo Router screens (library, reader)
+  app/              # Expo Router (home, author/[id], read/[id])
   components/       # AppLogo, LaunchSplash
   constants/        # Reading theme, category order
-  data/             # Bundled article-summaries.json, articles.json
+  data/             # Bundled authors.json, article-summaries.json, articles.json
   hooks/            # useArticles, useArticle
   lib/              # Supabase client, articles fetch, cache
 scripts/            # Import, export, Supabase setup, brand assets
@@ -68,6 +69,7 @@ assets/images/      # app-logo.svg (source), generated PNG icons
 | `bun run verify:supabase` | Test Supabase connection |
 | `bun run setup:supabase` | Apply migrations + seed |
 | `bun run import:noah` | Scrape and upsert all ideas from noahzender.com |
+| `bun run export:authors` | Regenerate `src/data/authors.json` |
 | `bun run export:summaries` | Regenerate `src/data/article-summaries.json` |
 | `bun run export:articles` | Regenerate `src/data/articles.json` (~527 KB) |
 | `bun run generate:brand-assets` | Regenerate icons/splash PNGs from `app-logo.svg` |
