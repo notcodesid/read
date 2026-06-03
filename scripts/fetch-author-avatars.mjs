@@ -23,6 +23,10 @@ const SOURCES = [
     id: 'dan-koe',
     url: 'https://pbs.twimg.com/profile_images/1845856303174037504/Q7ZZqVFa_400x400.jpg',
   },
+  {
+    id: 'antislop',
+    url: 'https://www.antislop.xyz/favicon.png',
+  },
 ];
 
 mkdirSync(outDir, { recursive: true });

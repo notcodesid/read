@@ -52,6 +52,7 @@
     "verify:supabase": "node --env-file=.env scripts/verify-supabase.mjs",
     "setup:supabase": "node --env-file=.env scripts/setup-supabase.mjs",
     "import:noah": "node --env-file=.env scripts/import-noah-ideas.mjs",
+    "import:antislop": "node --env-file=.env scripts/import-antislop.mjs",
     "export:authors": "node --env-file=.env scripts/export-authors.mjs",
     "export:taxonomy": "node --env-file=.env scripts/export-taxonomy.mjs",
     "export:summaries": "node --env-file=.env scripts/export-summaries.mjs",
