@@ -11,7 +11,9 @@
       "bundleIdentifier": "com.notcodesid.read",
       "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocalNetworkUsageDescription": "Read connects to your Mac on the local network to load updates while developing.",
+        "BonjourServices": ["_expo._tcp"]
       }
     },
     "android": {

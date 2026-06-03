@@ -5,4 +5,5 @@ export type Author = {
   siteUrl?: string;
   sortOrder: number;
   articleCount: number;
+  authorGroupId?: string;
 };

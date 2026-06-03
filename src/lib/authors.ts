@@ -10,6 +10,7 @@ type AuthorRow = {
   tagline: string | null;
   site_url: string | null;
   sort_order: number;
+  author_group_id: string | null;
 };
 
 type SummaryRow = { author_id: string };
@@ -22,6 +23,7 @@ function mapAuthor(row: AuthorRow, articleCount: number): Author {
     siteUrl: row.site_url ?? undefined,
     sortOrder: row.sort_order,
     articleCount,
+    authorGroupId: row.author_group_id ?? undefined,
   };
 }
 
@@ -54,7 +56,8 @@ export async function fetchAuthors(signal?: AbortSignal): Promise<Author[]> {
   }
 
   try {
-    const authorsEndpoint = `${url}/rest/v1/authors?select=id,name,tagline,site_url,sort_order&order=sort_order.asc`;
+    const authorsEndpoint =
+      `${url}/rest/v1/authors?select=id,name,tagline,site_url,sort_order,author_group_id&order=sort_order.asc`;
     const countsEndpoint = `${url}/rest/v1/articles?select=author_id`;
 
     const headers = {
