@@ -1,12 +1,19 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  HighlightableArticleBody,
+  type HighlightableArticleBodyHandle,
+} from '@/components/reader/highlightable-article-body';
+import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
 import { getBundledHeroImageSource } from '@/constants/article-images';
 import { ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useArticle } from '@/hooks/use-articles';
+import { useHighlights } from '@/hooks/use-highlights';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function ReaderScreen() {
@@ -14,6 +21,18 @@ export default function ReaderScreen() {
   const theme = useTheme();
   const articleId = typeof id === 'string' ? id : undefined;
   const { article, loading, error, retry } = useArticle(articleId);
+  const { highlights, addHighlight, removeHighlight } = useHighlights(articleId);
+  const bodyRef = useRef<HighlightableArticleBodyHandle>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectionPreview, setSelectionPreview] = useState('');
+
+  const handleSelectingChange = useCallback((value: boolean) => {
+    setSelecting(value);
+  }, []);
+
+  const handleSelectionPreviewChange = useCallback((preview: string) => {
+    setSelectionPreview(preview);
+  }, []);
 
   if (loading && !article) {
     return (
@@ -54,8 +73,12 @@ export default function ReaderScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}>
+          contentContainerStyle={[
+            styles.content,
+            selecting && styles.contentWithToolbar,
+          ]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
           {article.category ? (
             <Text style={[styles.category, { color: theme.textSecondary }]}>{article.category}</Text>
           ) : null}
@@ -77,17 +100,18 @@ export default function ReaderScreen() {
 
           <View style={styles.body}>
             {hasBody ? (
-              article.paragraphs.map((paragraph, index) => (
-                <Text
-                  key={index}
-                  style={[
-                    styles.paragraph,
-                    { color: theme.text },
-                    index > 0 && styles.paragraphSpacing,
-                  ]}>
-                  {paragraph}
-                </Text>
-              ))
+              <HighlightableArticleBody
+                ref={bodyRef}
+                articleId={article.id}
+                paragraphs={article.paragraphs}
+                highlights={highlights}
+                textColor={theme.text}
+                metaColor={theme.textSecondary}
+                onAddHighlight={addHighlight}
+                onRemoveHighlight={removeHighlight}
+                onSelectingChange={handleSelectingChange}
+                onSelectionPreviewChange={handleSelectionPreviewChange}
+              />
             ) : (
               <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
                 No content available for this article.
@@ -107,6 +131,14 @@ export default function ReaderScreen() {
             </Pressable>
           ) : null}
         </ScrollView>
+
+        {selecting ? (
+          <HighlightToolbar
+            selectionPreview={selectionPreview}
+            onHighlight={() => bodyRef.current?.saveHighlight()}
+            onCancel={() => bodyRef.current?.cancelSelection()}
+          />
+        ) : null}
       </SafeAreaView>
     </>
   );
@@ -146,6 +178,9 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  contentWithToolbar: {
+    paddingBottom: ReadingLayout.insetBottom + 120,
+  },
   category: {
     ...ReadingTypography.meta,
     marginBottom: 8,
@@ -172,15 +207,6 @@ const styles = StyleSheet.create({
   },
   body: {
     gap: 0,
-  },
-  paragraph: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: ReadingTypography.bodySize,
-    lineHeight: ReadingTypography.bodyLineHeight,
-    letterSpacing: 0.1,
-  },
-  paragraphSpacing: {
-    marginTop: ReadingTypography.paragraphGap,
   },
   emptyBody: {
     fontFamily: ReadingTypography.serif,

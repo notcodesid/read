@@ -57,3 +57,17 @@ export const ReadingCover = {
   radius: 4,
   headerWidth: 72,
 } as const;
+
+/** Warm highlighter — matches the book logo accent */
+export const ReadingHighlight = {
+  light: {
+    fill: 'rgba(255, 205, 105, 0.48)',
+    fillSelecting: 'rgba(255, 205, 105, 0.62)',
+    underline: 'rgba(255, 169, 107, 0.55)',
+  },
+  dark: {
+    fill: 'rgba(255, 205, 105, 0.28)',
+    fillSelecting: 'rgba(255, 205, 105, 0.42)',
+    underline: 'rgba(255, 169, 107, 0.4)',
+  },
+} as const;
