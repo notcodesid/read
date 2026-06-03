@@ -12,7 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '@/components/app-logo';
 import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
 import { BlogTopicRow } from '@/components/home/blog-topic-row';
-import { BrowseModeSwitch } from '@/components/home/browse-mode-switch';
+import {
+  GLASS_BROWSE_DOCK_SCROLL_PADDING,
+  GlassBrowseDock,
+} from '@/components/home/glass-browse-dock';
 import { ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useHomeBrowse } from '@/hooks/use-home-browse';
 import { useTheme } from '@/hooks/use-theme';
@@ -37,18 +40,13 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: GLASS_BROWSE_DOCK_SCROLL_PADDING },
+        ]}
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <AppLogo size={56} />
-          <BrowseModeSwitch
-            mode={mode}
-            onChange={setMode}
-            backgroundColor={theme.backgroundElement}
-            selectedBackground={theme.background}
-            textColor={theme.text}
-            metaColor={theme.textSecondary}
-          />
           <View style={styles.headerRow}>
             <Text style={[styles.heading, { color: theme.text }]}>{heading}</Text>
             {error ? (
@@ -114,6 +112,15 @@ export default function HomeScreen() {
           </View>
         )}
       </ScrollView>
+
+      <GlassBrowseDock
+        mode={mode}
+        onChange={setMode}
+        textColor={theme.text}
+        metaColor={theme.textSecondary}
+        surfaceColor={theme.backgroundSelected}
+        borderColor={theme.border}
+      />
     </SafeAreaView>
   );
 }
@@ -126,14 +133,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: ReadingLayout.insetBottom,
+    flexGrow: 1,
   },
   header: {
     alignItems: 'center',
     paddingHorizontal: ReadingLayout.insetX,
     paddingTop: 8,
     paddingBottom: 20,
-    gap: 16,
+    gap: 12,
   },
   headerRow: {
     alignSelf: 'stretch',
