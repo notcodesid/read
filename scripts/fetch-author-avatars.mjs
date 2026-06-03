@@ -19,6 +19,10 @@ const SOURCES = [
     id: 'paul-graham',
     url: 'https://s.turbifycdn.com/aah/paulgraham/bio-19.gif',
   },
+  {
+    id: 'dan-koe',
+    url: 'https://pbs.twimg.com/profile_images/1845856303174037504/Q7ZZqVFa_400x400.jpg',
+  },
 ];
 
 mkdirSync(outDir, { recursive: true });

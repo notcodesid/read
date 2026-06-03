@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
 import { AuthorAvatar } from '@/components/author-avatar';
+import { getAuthorShelfCategories } from '@/constants/author-categories';
 import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useAuthors } from '@/hooks/use-authors';
 import { useTheme } from '@/hooks/use-theme';
@@ -29,7 +30,7 @@ export default function HomeScreen() {
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={styles.page}>
         <View style={styles.header}>
-          <AppLogo size={44} />
+          <AppLogo size={56} />
           <View style={styles.headerRow}>
             <Text style={[styles.heading, { color: theme.text }]}>Authors</Text>
             {error ? (
@@ -42,28 +43,30 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <FlatList
-          data={authors}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={SNAP_INTERVAL}
-          snapToAlignment="start"
-          disableIntervalMomentum
-          contentContainerStyle={[
-            styles.carousel,
-            { paddingHorizontal: ReadingLayout.insetX },
-          ]}
-          renderItem={({ item }) => (
-            <AuthorTile
-              author={item}
-              textColor={theme.text}
-              metaColor={theme.textSecondary}
-              onPress={() => router.push(`/author/${item.id}`)}
-            />
-          )}
-        />
+        <View style={styles.carouselWrap}>
+          <FlatList
+            data={authors}
+            keyExtractor={(item) => item.id}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={SNAP_INTERVAL}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            contentContainerStyle={[
+              styles.carousel,
+              { paddingHorizontal: ReadingLayout.insetX },
+            ]}
+            renderItem={({ item }) => (
+              <AuthorTile
+                author={item}
+                textColor={theme.text}
+                metaColor={theme.textSecondary}
+                onPress={() => router.push(`/author/${item.id}`)}
+              />
+            )}
+          />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -80,25 +83,26 @@ function AuthorTile({
   metaColor: string;
   onPress: () => void;
 }) {
-  const countLabel =
-    author.articleCount === 1 ? '1 piece' : `${author.articleCount} pieces`;
+  const categories = getAuthorShelfCategories(author.id);
+  const categoryLabel = categories.join(' · ');
 
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${author.name}, ${countLabel}`}
+      accessibilityLabel={
+        categoryLabel ? `${author.name}, ${categoryLabel}` : author.name
+      }
       style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
       <AuthorAvatar authorId={author.id} name={author.name} width={TILE_WIDTH} />
       <Text style={[styles.name, { color: textColor }]} numberOfLines={2}>
         {author.name}
       </Text>
-      {author.tagline ? (
-        <Text style={[styles.descriptor, { color: metaColor }]} numberOfLines={3}>
-          {author.tagline}
+      {categoryLabel ? (
+        <Text style={[styles.categories, { color: metaColor }]} numberOfLines={2}>
+          {categoryLabel}
         </Text>
       ) : null}
-      <Text style={[styles.count, { color: metaColor }]}>{countLabel}</Text>
     </Pressable>
   );
 }
@@ -109,13 +113,17 @@ const styles = StyleSheet.create({
   },
   page: {
     flex: 1,
-    justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
     paddingHorizontal: ReadingLayout.insetX,
-    marginBottom: 28,
-    gap: 16,
+    paddingTop: 8,
+    paddingBottom: 20,
+    gap: 20,
+  },
+  carouselWrap: {
+    flex: 1,
+    justifyContent: 'center',
   },
   headerRow: {
     alignSelf: 'stretch',
@@ -139,7 +147,7 @@ const styles = StyleSheet.create({
   tile: {
     width: TILE_WIDTH,
     marginRight: TILE_GAP,
-    gap: 10,
+    gap: 8,
   },
   tilePressed: {
     opacity: 0.65,
@@ -151,15 +159,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     letterSpacing: -0.1,
   },
-  descriptor: {
-    fontSize: 12,
-    lineHeight: 16,
-    letterSpacing: 0.1,
-  },
-  count: {
+  categories: {
     ...ReadingTypography.meta,
     fontSize: 11,
-    letterSpacing: 0.2,
-    textTransform: 'uppercase',
+    lineHeight: 15,
+    letterSpacing: 0.15,
   },
 });
