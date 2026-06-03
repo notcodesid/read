@@ -28,16 +28,17 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <AppLogo size={56} />
-          <View style={styles.headerRow}>
-            <Text style={[styles.heading, { color: theme.text }]}>Authors</Text>
-            {error ? (
-              <Pressable onPress={refresh} accessibilityRole="button">
-                <Text style={[styles.retry, { color: theme.textSecondary }]}>Try again</Text>
-              </Pressable>
-            ) : refreshing ? (
-              <ActivityIndicator color={theme.textSecondary} />
-            ) : null}
-          </View>
+          {error || refreshing ? (
+            <View style={styles.headerStatus}>
+              {error ? (
+                <Pressable onPress={refresh} accessibilityRole="button">
+                  <Text style={[styles.retry, { color: theme.textSecondary }]}>Try again</Text>
+                </Pressable>
+              ) : (
+                <ActivityIndicator color={theme.textSecondary} />
+              )}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.shelves}>
@@ -88,17 +89,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     gap: 20,
   },
-  headerRow: {
+  headerStatus: {
     alignSelf: 'stretch',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  heading: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: 22,
-    fontWeight: '600',
-    letterSpacing: -0.3,
+    alignItems: 'flex-end',
+    minHeight: 20,
   },
   retry: {
     fontSize: 14,
