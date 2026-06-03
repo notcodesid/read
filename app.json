@@ -4,13 +4,12 @@
     "slug": "read",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/app-logo.png",
+    "icon": "./assets/images/app-icon.png",
     "scheme": "read",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.notcodesid.read",
       "buildNumber": "1",
-      "icon": "./assets/expo.icon",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -28,6 +27,11 @@
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
+    },
+    "splash": {
+      "image": "./assets/images/app-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#faf8f5"
     },
     "plugins": [
       "expo-router",
