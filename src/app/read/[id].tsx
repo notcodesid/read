@@ -102,7 +102,7 @@ export default function ReaderScreen() {
               accessibilityLabel="Open original article"
               style={({ pressed }) => [styles.sourceLink, pressed && styles.sourceLinkPressed]}>
               <Text style={[styles.sourceLinkText, { color: theme.textSecondary }]}>
-                View on noahzender.com
+                View original
               </Text>
             </Pressable>
           ) : null}

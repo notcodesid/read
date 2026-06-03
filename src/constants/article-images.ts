@@ -1,6 +1,6 @@
 /** Bundled hero images for offline reading (keyed by article id). */
 export const BUNDLED_HERO_IMAGES: Partial<Record<string, number>> = {
-  'the-path-at-night': require('@/assets/images/articles/the-path-at-night.jpg'),
+  'how-to-become-so-creative-it-feels-illegal': require('@/assets/images/articles/how-to-become-so-creative-it-feels-illegal.jpg'),
 };
 
 export function getBundledHeroImageSource(articleId: string): number | undefined {
