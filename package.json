@@ -59,7 +59,9 @@
     "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
     "fetch:author-avatars": "node scripts/fetch-author-avatars.mjs",
     "add:article": "node --env-file=.env scripts/add-article.mjs",
-    "add:author": "node --env-file=.env scripts/add-author.mjs"
+    "add:author": "node --env-file=.env scripts/add-author.mjs",
+    "merge:author": "node scripts/merge-author-into-bundle.mjs",
+    "merge:article": "node scripts/merge-article-into-bundle.mjs"
   },
   "private": true
 }
