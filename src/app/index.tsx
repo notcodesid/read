@@ -82,7 +82,7 @@ function AuthorCard({
         { borderBottomColor: borderColor },
         pressed && styles.cardPressed,
       ]}>
-      <AuthorAvatar name={author.name} size={48} />
+      <AuthorAvatar authorId={author.id} name={author.name} size={48} />
       <View style={styles.cardBody}>
         <Text style={[styles.cardTitle, { color: textColor }]}>{author.name}</Text>
         {author.tagline ? (

@@ -34,7 +34,7 @@ export default function AuthorScreen() {
         <Text style={[styles.back, { color: theme.textSecondary }]}>← Authors</Text>
       </Pressable>
       <View style={styles.authorRow}>
-        <AuthorAvatar name={author?.name ?? authorId} size={52} />
+        <AuthorAvatar authorId={authorId} name={author?.name ?? authorId} size={52} />
         <View style={styles.authorMeta}>
           <Text style={[styles.authorName, { color: theme.text }]}>
             {author?.name ?? authorId}
