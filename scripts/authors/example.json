@@ -1,0 +1,8 @@
+{
+  "id": "your-slug",
+  "name": "Writer Name",
+  "tagline": "One line about what they write",
+  "site_url": "https://example.com",
+  "sort_order": 10,
+  "author_group_id": "general-ideas"
+}

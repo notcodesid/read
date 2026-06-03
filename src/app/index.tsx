@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -10,24 +10,22 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
-import { AuthorAvatar } from '@/components/author-avatar';
-import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
-import { useAuthors } from '@/hooks/use-authors';
+import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
+import { ReadingLayout, ReadingTypography } from '@/constants/reading';
+import { useAuthorShelf } from '@/hooks/use-author-shelf';
 import { useTheme } from '@/hooks/use-theme';
-import type { Author } from '@/types/author';
-
-const TILE_WIDTH = ReadingCover.tileWidth;
-const TILE_GAP = ReadingCover.tileGap;
-const SNAP_INTERVAL = TILE_WIDTH + TILE_GAP;
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { authors, refreshing, error, refresh } = useAuthors();
+  const { sections, unassignedAuthors, refreshing, error, refresh } = useAuthorShelf();
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <View style={styles.page}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <AppLogo size={56} />
           <View style={styles.headerRow}>
@@ -42,61 +40,34 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <View style={styles.carouselWrap}>
-          <FlatList
-            data={authors}
-            keyExtractor={(item) => item.id}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={SNAP_INTERVAL}
-            snapToAlignment="start"
-            disableIntervalMomentum
-            contentContainerStyle={[
-              styles.carousel,
-              { paddingHorizontal: ReadingLayout.insetX },
-            ]}
-            renderItem={({ item }) => (
-              <AuthorTile
-                author={item}
-                textColor={theme.text}
-                onPress={() => router.push(`/author/${item.id}`)}
-              />
-            )}
-            ListEmptyComponent={
-              !refreshing ? (
-                <Text style={[styles.empty, { color: theme.textSecondary }]}>
-                  No authors yet.
-                </Text>
-              ) : null
-            }
-          />
-        </View>
-      </View>
-    </SafeAreaView>
-  );
-}
+        <View style={styles.shelves}>
+          {sections.map((section) => (
+            <AuthorGroupCarousel
+              key={section.group.id}
+              group={section.group}
+              authors={section.authors}
+              textColor={theme.text}
+              metaColor={theme.textSecondary}
+              onAuthorPress={(authorId) => router.push(`/author/${authorId}`)}
+            />
+          ))}
 
-function AuthorTile({
-  author,
-  textColor,
-  onPress,
-}: {
-  author: Author;
-  textColor: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={author.name}
-      style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}>
-      <AuthorAvatar authorId={author.id} name={author.name} width={TILE_WIDTH} />
-      <Text style={[styles.name, { color: textColor }]} numberOfLines={2}>
-        {author.name}
-      </Text>
-    </Pressable>
+          {unassignedAuthors.length > 0 ? (
+            <AuthorGroupCarousel
+              group={{
+                id: 'unassigned',
+                name: 'Unsorted',
+                sortOrder: 99,
+              }}
+              authors={unassignedAuthors}
+              textColor={theme.text}
+              metaColor={theme.textSecondary}
+              onAuthorPress={(authorId) => router.push(`/author/${authorId}`)}
+            />
+          ) : null}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -104,19 +75,18 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  page: {
+  scroll: {
     flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: ReadingLayout.insetBottom,
   },
   header: {
     alignItems: 'center',
     paddingHorizontal: ReadingLayout.insetX,
     paddingTop: 8,
-    paddingBottom: 20,
+    paddingBottom: 24,
     gap: 20,
-  },
-  carouselWrap: {
-    flex: 1,
-    justifyContent: 'center',
   },
   headerRow: {
     alignSelf: 'stretch',
@@ -134,26 +104,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  carousel: {
-    paddingBottom: ReadingLayout.insetBottom,
-  },
-  tile: {
-    width: TILE_WIDTH,
-    marginRight: TILE_GAP,
-    gap: 8,
-  },
-  tilePressed: {
-    opacity: 0.65,
-  },
-  name: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 19,
-    letterSpacing: -0.1,
-  },
-  empty: {
-    ...ReadingTypography.meta,
-    paddingVertical: 24,
+  shelves: {
+    paddingTop: 4,
   },
 });

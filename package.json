@@ -58,7 +58,8 @@
     "export:articles": "node --env-file=.env scripts/export-articles.mjs",
     "generate:brand-assets": "node scripts/generate-brand-assets.mjs",
     "fetch:author-avatars": "node scripts/fetch-author-avatars.mjs",
-    "add:article": "node --env-file=.env scripts/add-article.mjs"
+    "add:article": "node --env-file=.env scripts/add-article.mjs",
+    "add:author": "node --env-file=.env scripts/add-author.mjs"
   },
   "private": true
 }

@@ -4,7 +4,7 @@ A minimal reading app for long-form ideas and essays. Built with Expo and React 
 
 ## Features
 
-- **Home** — author shelf (Noah Zender, Dan Koe, …) with piece counts and web links
+- **Home** — authors on horizontal shelves by category (New chapters, Essay, General ideas, Not creative)
 - **Author view** — that writer’s articles grouped by their categories
 - **Reader** — serif typography, paper-like light/dark theme, swipe back on iOS
 - **Offline-first** — bundled summaries and full articles; Supabase refresh when online
@@ -69,12 +69,33 @@ assets/images/      # app-logo.svg (source), generated PNG icons
 | `bun run verify:supabase` | Test Supabase connection |
 | `bun run setup:supabase` | Apply migrations + seed |
 | `bun run import:noah` | Scrape and upsert all ideas from noahzender.com |
+| `bun run add:author` | Upsert an author + shelf group from JSON |
 | `bun run export:authors` | Regenerate `src/data/authors.json` |
+| `bun run export:taxonomy` | Regenerate `src/data/author-groups.json` |
 | `bun run export:summaries` | Regenerate `src/data/article-summaries.json` |
 | `bun run export:articles` | Regenerate `src/data/articles.json` (~527 KB) |
 | `bun run generate:brand-assets` | Regenerate icons/splash PNGs from `app-logo.svg` |
 
 After changing content in Supabase, run `export:summaries` and `export:articles` so offline bundles stay in sync.
+
+## Adding content (no new iOS build for every paste)
+
+Content lives in **Supabase**. The app loads it over the network when online, and uses bundled JSON as backup offline.
+
+1. **Apply migrations** (once): `bun run setup:supabase` (includes `007_author_shelf_groups.sql`).
+2. **Add a writer** — copy `scripts/authors/example.json`, set `author_group_id` to one of:
+   - `new-chapters`
+   - `essay`
+   - `general-ideas`
+   - `not-creative`  
+   Then: `bun run add:author -- --file scripts/authors/your-file.json`
+3. **Add an article** — JSON under `scripts/articles/` with `author_id`, `title`, `paragraphs`, `category`, then:  
+   `bun run add:article -- --file scripts/articles/your-article.json`
+4. **Refresh offline bundles** (optional, for airplane mode):  
+   `bun run export:authors && bun run export:taxonomy && bun run export:summaries && bun run export:articles`
+5. **Reload the app** — pull to refresh or reopen; no TestFlight rebuild unless you changed native code.
+
+New authors appear on the matching **horizontal shelf** on home. Article topics still group inside each author’s page.
 
 ## Brand assets
 
