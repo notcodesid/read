@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
@@ -12,35 +11,26 @@ import type { ArticleSummary } from '@/types/article';
 export default function LibraryScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { sections, loading, error, refresh } = useArticles();
-  const totalCount = sections.reduce((sum, section) => sum + section.articles.length, 0);
+  const { sections, refreshing, error, refresh } = useArticles();
   const listSections = sections.map((section) => ({
     title: section.category,
     data: section.articles,
   }));
 
-  useEffect(() => {
-    console.log('[read:LibraryScreen]', {
-      loading,
-      error,
-      sectionCount: sections.length,
-      totalCount,
-      listSections: listSections.map((s) => ({ title: s.title, count: s.data.length })),
-    });
-  }, [loading, error, sections, totalCount, listSections]);
-
   const listHeader = (
     <View style={styles.header}>
       <AppLogo size={44} />
-      {loading ? (
-        <ActivityIndicator color={theme.textSecondary} />
-      ) : error ? (
+      {error ? (
         <View style={styles.status}>
-          <Text style={[styles.statusText, { color: theme.textSecondary }]}>{error}</Text>
-          <Pressable onPress={refresh}>
+          <Text style={[styles.statusText, { color: theme.textSecondary }]}>
+            Could not refresh library
+          </Text>
+          <Pressable onPress={refresh} accessibilityRole="button" accessibilityLabel="Try again">
             <Text style={[styles.retry, { color: theme.text }]}>Try again</Text>
           </Pressable>
         </View>
+      ) : refreshing ? (
+        <Text style={[styles.statusText, { color: theme.textSecondary }]}>Updating…</Text>
       ) : null}
     </View>
   );
@@ -88,6 +78,8 @@ function ArticleRow({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={article.title}
       style={({ pressed }) => [
         styles.row,
         { borderBottomColor: borderColor },
@@ -118,9 +110,6 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 20,
     gap: 10,
-  },
-  loader: {
-    marginTop: 24,
   },
   status: {
     gap: 12,

@@ -1,5 +1,6 @@
+import * as WebBrowser from 'expo-web-browser';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ReadingLayout, ReadingTypography } from '@/constants/reading';
@@ -10,9 +11,9 @@ export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const articleId = typeof id === 'string' ? id : undefined;
-  const { article, loading, error } = useArticle(articleId);
+  const { article, loading, error, retry } = useArticle(articleId);
 
-  if (loading) {
+  if (loading && !article) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
         <View style={styles.centered}>
@@ -29,10 +30,19 @@ export default function ReaderScreen() {
           <Text style={[styles.missingText, { color: theme.textSecondary }]}>
             {error ?? 'Not found'}
           </Text>
+          <Pressable
+            onPress={retry}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            style={styles.retryButton}>
+            <Text style={[styles.retryText, { color: theme.text }]}>Try again</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
   }
+
+  const hasBody = article.paragraphs.length > 0;
 
   return (
     <>
@@ -53,18 +63,36 @@ export default function ReaderScreen() {
           )}
 
           <View style={styles.body}>
-            {article.paragraphs.map((paragraph, index) => (
-              <Text
-                key={index}
-                style={[
-                  styles.paragraph,
-                  { color: theme.text },
-                  index > 0 && styles.paragraphSpacing,
-                ]}>
-                {paragraph}
+            {hasBody ? (
+              article.paragraphs.map((paragraph, index) => (
+                <Text
+                  key={index}
+                  style={[
+                    styles.paragraph,
+                    { color: theme.text },
+                    index > 0 && styles.paragraphSpacing,
+                  ]}>
+                  {paragraph}
+                </Text>
+              ))
+            ) : (
+              <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
+                No content available for this article.
               </Text>
-            ))}
+            )}
           </View>
+
+          {article.sourceUrl ? (
+            <Pressable
+              onPress={() => WebBrowser.openBrowserAsync(article.sourceUrl!)}
+              accessibilityRole="link"
+              accessibilityLabel="Open original article"
+              style={({ pressed }) => [styles.sourceLink, pressed && styles.sourceLinkPressed]}>
+              <Text style={[styles.sourceLinkText, { color: theme.textSecondary }]}>
+                View on noahzender.com
+              </Text>
+            </Pressable>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </>
@@ -79,9 +107,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 16,
+    paddingHorizontal: ReadingLayout.insetX,
   },
   missingText: {
     ...ReadingTypography.meta,
+    textAlign: 'center',
+  },
+  retryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  retryText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
   scroll: {
     flex: 1,
@@ -123,5 +162,22 @@ const styles = StyleSheet.create({
   },
   paragraphSpacing: {
     marginTop: ReadingTypography.paragraphGap,
+  },
+  emptyBody: {
+    fontFamily: ReadingTypography.serif,
+    fontSize: ReadingTypography.bodySize,
+    lineHeight: ReadingTypography.bodyLineHeight,
+    fontStyle: 'italic',
+  },
+  sourceLink: {
+    marginTop: 32,
+    paddingVertical: 8,
+  },
+  sourceLinkPressed: {
+    opacity: 0.6,
+  },
+  sourceLinkText: {
+    ...ReadingTypography.meta,
+    textDecorationLine: 'underline',
   },
 });

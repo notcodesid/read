@@ -1,15 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
+import { devLog, devWarn } from '@/lib/log';
+
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 const LOG = '[read:supabase]';
 const FETCH_TIMEOUT_MS = 25_000;
 
-console.log(LOG, 'init', {
+devLog(LOG, 'init', {
   hasUrl: Boolean(supabaseUrl),
   hasKey: Boolean(supabasePublishableKey),
-  url: supabaseUrl ?? '(missing)',
 });
 
 export function fetchWithTimeout(
@@ -30,7 +31,7 @@ export function fetchWithTimeout(
   const timeoutId = setTimeout(() => {
     if (!controller.signal.aborted) {
       controller.abort();
-      console.warn(LOG, 'fetch timeout', String(input).slice(0, 120));
+      devWarn(LOG, 'fetch timeout', String(input).slice(0, 120));
     }
   }, FETCH_TIMEOUT_MS);
 
@@ -40,7 +41,7 @@ export function fetchWithTimeout(
 }
 
 if (!supabaseUrl || !supabasePublishableKey) {
-  console.error(LOG, 'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
+  devWarn(LOG, 'Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY');
 }
 
 export const supabase = createClient(
@@ -57,8 +58,6 @@ export const supabase = createClient(
     },
   },
 );
-
-console.log(LOG, 'client created');
 
 export function getSupabaseConfig() {
   return { url: supabaseUrl, key: supabasePublishableKey };

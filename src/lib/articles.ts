@@ -7,11 +7,13 @@ import {
   saveArticleCache,
   saveArticleSummariesCache,
 } from '@/lib/article-cache';
+import { decodeHtml } from '@/lib/decode-html';
+import { devLog, devWarn } from '@/lib/log';
 import { fetchWithTimeout, getSupabaseConfig, supabase } from '@/lib/supabase';
 import type { Article, ArticleSection, ArticleSummary } from '@/types/article';
 
 const LOG = '[read:articles]';
-const RETRY_ATTEMPTS = 3;
+const RETRY_ATTEMPTS = 2;
 
 export type ArticlesLoadSource = 'network' | 'cache' | 'bundled';
 
@@ -40,20 +42,20 @@ type SummaryRow = {
 function mapSummary(row: SummaryRow): ArticleSummary {
   return {
     id: row.id,
-    title: row.title,
-    category: row.category ?? undefined,
+    title: decodeHtml(row.title),
+    category: row.category ? decodeHtml(row.category) : undefined,
   };
 }
 
 function mapRow(row: ArticleRow): Article {
   return {
     id: row.id,
-    title: row.title,
-    category: row.category ?? undefined,
-    source: row.source ?? undefined,
-    author: row.author ?? undefined,
+    title: decodeHtml(row.title),
+    category: row.category ? decodeHtml(row.category) : undefined,
+    source: row.source ? decodeHtml(row.source) : undefined,
+    author: row.author ? decodeHtml(row.author) : undefined,
     sourceUrl: row.source_url ?? undefined,
-    paragraphs: row.paragraphs,
+    paragraphs: row.paragraphs.map(decodeHtml),
     addedAt: row.added_at,
   };
 }
@@ -68,16 +70,17 @@ const bundledArticleById = new Map(
 
 function loadBundledSummaries(): ArticleSummary[] {
   const rows = bundledSummaries as SummaryRow[];
-  console.log(LOG, 'using bundled summaries', rows.length);
   return rows.map(mapSummary);
 }
 
-function loadBundledArticle(id: string): Article | null {
-  const article = bundledArticleById.get(id) ?? null;
-  if (article) {
-    console.log(LOG, 'using bundled article', id, { paragraphs: article.paragraphs.length });
-  }
-  return article;
+/** Synchronous bundled library — available on first frame. */
+export function getBundledSummaries(): ArticleSummary[] {
+  return loadBundledSummaries();
+}
+
+/** Synchronous bundled article body for instant reader open. */
+export function getBundledArticle(id: string): Article | null {
+  return bundledArticleById.get(id) ?? null;
 }
 
 async function fetchSummariesViaRest(signal?: AbortSignal): Promise<ArticleSummary[]> {
@@ -90,7 +93,7 @@ async function fetchSummariesViaRest(signal?: AbortSignal): Promise<ArticleSumma
     `${url}/rest/v1/articles?select=id,title,category` +
     '&order=category.asc&order=title.asc';
 
-  console.log(LOG, 'REST fetch start');
+  devLog(LOG, 'REST fetch start');
   const started = Date.now();
 
   const response = await fetchWithTimeout(endpoint, {
@@ -103,7 +106,7 @@ async function fetchSummariesViaRest(signal?: AbortSignal): Promise<ArticleSumma
   });
 
   const text = await response.text();
-  console.log(LOG, 'REST fetch done', {
+  devLog(LOG, 'REST fetch done', {
     ms: Date.now() - started,
     status: response.status,
     bytes: text.length,
@@ -153,7 +156,7 @@ async function fetchArticleViaRest(id: string, signal?: AbortSignal): Promise<Ar
 export async function fetchArticleSummaries(
   signal?: AbortSignal,
 ): Promise<ArticlesLoadResult> {
-  console.log(LOG, 'fetchArticleSummaries start');
+  devLog(LOG, 'fetchArticleSummaries start');
 
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     if (signal?.aborted) {
@@ -161,14 +164,14 @@ export async function fetchArticleSummaries(
     }
 
     try {
-      console.log(LOG, `network attempt ${attempt}/${RETRY_ATTEMPTS}`);
+      devLog(LOG, `network attempt ${attempt}/${RETRY_ATTEMPTS}`);
       const articles = await fetchSummariesViaRest(signal);
       await saveArticleSummariesCache(articles);
-      console.log(LOG, 'fetchArticleSummaries done (network)', { total: articles.length });
+      devLog(LOG, 'fetchArticleSummaries done (network)', { total: articles.length });
       return { articles, source: 'network' };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(LOG, `attempt ${attempt} failed`, message);
+      devWarn(LOG, `attempt ${attempt} failed`, message);
       if (attempt < RETRY_ATTEMPTS) {
         await sleep(attempt * 1500);
       }
@@ -177,12 +180,12 @@ export async function fetchArticleSummaries(
 
   const cached = await loadArticleSummariesCache();
   if (cached && cached.length > 0) {
-    console.log(LOG, 'fetchArticleSummaries done (cache)', { total: cached.length });
+    devLog(LOG, 'fetchArticleSummaries done (cache)', { total: cached.length });
     return { articles: cached, source: 'cache' };
   }
 
   const bundled = loadBundledSummaries();
-  console.log(LOG, 'fetchArticleSummaries done (bundled)', { total: bundled.length });
+  devLog(LOG, 'fetchArticleSummaries done (bundled)', { total: bundled.length });
   return { articles: bundled, source: 'bundled' };
 }
 
@@ -205,7 +208,7 @@ export function groupArticlesByCategory(articles: ArticleSummary[]): ArticleSect
 }
 
 export async function fetchArticleById(id: string, signal?: AbortSignal): Promise<Article | null> {
-  console.log(LOG, 'fetchArticleById', id);
+  devLog(LOG, 'fetchArticleById', id);
 
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     if (signal?.aborted) {
@@ -215,7 +218,7 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
     try {
       const started = Date.now();
       const article = await fetchArticleViaRest(id, signal);
-      console.log(LOG, 'fetchArticleById result (REST)', {
+      devLog(LOG, 'fetchArticleById result (REST)', {
         ms: Date.now() - started,
         id,
         found: Boolean(article),
@@ -225,7 +228,7 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
       }
       return article;
     } catch (err) {
-      console.warn(LOG, `fetchArticleById attempt ${attempt} failed`, err);
+      devWarn(LOG, `fetchArticleById attempt ${attempt} failed`, err);
       if (attempt < RETRY_ATTEMPTS) {
         await sleep(attempt * 1500);
       }
@@ -240,7 +243,7 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
       .eq('id', id)
       .maybeSingle();
 
-    console.log(LOG, 'fetchArticleById result (client)', {
+    devLog(LOG, 'fetchArticleById result (client)', {
       ms: Date.now() - started,
       error: error?.message ?? null,
       found: Boolean(data),
@@ -256,18 +259,18 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
       return article;
     }
   } catch (err) {
-    console.warn(LOG, 'fetchArticleById client fallback failed', err);
+    devWarn(LOG, 'fetchArticleById client fallback failed', err);
   }
 
   const cached = await loadArticleCache(id);
   if (cached) {
-    console.log(LOG, 'fetchArticleById done (cache)', id);
+    devLog(LOG, 'fetchArticleById done (cache)', id);
     return cached;
   }
 
-  const bundled = loadBundledArticle(id);
+  const bundled = getBundledArticle(id);
   if (bundled) {
-    console.log(LOG, 'fetchArticleById done (bundled)', id);
+    devLog(LOG, 'fetchArticleById done (bundled)', id);
     return bundled;
   }
 

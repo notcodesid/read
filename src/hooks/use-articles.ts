@@ -3,39 +3,44 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchArticleById,
   fetchArticleSummaries,
+  getBundledArticle,
+  getBundledSummaries,
   groupArticlesByCategory,
   type ArticlesLoadSource,
 } from '@/lib/articles';
+import { devLog, devWarn } from '@/lib/log';
 import type { Article, ArticleSection } from '@/types/article';
 
 const LOG = '[read:useArticles]';
 
 export function useArticles() {
-  const [sections, setSections] = useState<ArticleSection[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [sections, setSections] = useState<ArticleSection[]>(() =>
+    groupArticlesByCategory(getBundledSummaries()),
+  );
+  const [refreshing, setRefreshing] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<ArticlesLoadSource | null>(null);
+  const [source, setSource] = useState<ArticlesLoadSource | null>('bundled');
   const requestId = useRef(0);
 
   const load = useCallback(async () => {
     const id = ++requestId.current;
     const controller = new AbortController();
 
-    console.log(LOG, 'load start', { id });
-    setLoading(true);
+    devLog(LOG, 'refresh start', { id });
+    setRefreshing(true);
     setError(null);
 
     try {
       const result = await fetchArticleSummaries(controller.signal);
 
       if (id !== requestId.current) {
-        console.log(LOG, 'load stale, ignoring', { id });
+        devLog(LOG, 'refresh stale, ignoring', { id });
         return;
       }
 
       setSections(groupArticlesByCategory(result.articles));
       setSource(result.source);
-      console.log(LOG, 'load success', {
+      devLog(LOG, 'refresh success', {
         id,
         articles: result.articles.length,
         source: result.source,
@@ -47,18 +52,16 @@ export function useArticles() {
 
       const message = err instanceof Error ? err.message : 'Failed to load articles';
       if (message.includes('canceled') || message.includes('Canceled')) {
-        console.log(LOG, 'load canceled', { id });
+        devLog(LOG, 'refresh canceled', { id });
         return;
       }
 
-      console.error(LOG, 'load failed', err);
+      devWarn(LOG, 'refresh failed, keeping bundled list', err);
       setError(message);
-      setSections([]);
-      setSource(null);
     } finally {
       if (id === requestId.current) {
-        setLoading(false);
-        console.log(LOG, 'load end', { id });
+        setRefreshing(false);
+        devLog(LOG, 'refresh end', { id });
       }
     }
   }, []);
@@ -67,55 +70,63 @@ export function useArticles() {
     load();
   }, [load]);
 
-  return { sections, loading, error, source, refresh: load };
+  return { sections, refreshing, error, source, refresh: load };
 }
 
 export function useArticle(articleId: string | undefined) {
-  const [article, setArticle] = useState<Article | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [article, setArticle] = useState<Article | null>(() =>
+    articleId ? getBundledArticle(articleId) : null,
+  );
+  const [loading, setLoading] = useState(() =>
+    articleId ? getBundledArticle(articleId) === null : false,
+  );
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!articleId) {
       setArticle(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
-    const controller = new AbortController();
-    let cancelled = false;
-
-    (async () => {
+    const bundled = getBundledArticle(articleId);
+    if (bundled) {
+      setArticle(bundled);
+      setLoading(false);
+      setError(null);
+    } else {
       setLoading(true);
       setError(null);
-      try {
-        const result = await fetchArticleById(articleId, controller.signal);
-        if (!cancelled) {
-          setArticle(result);
-        }
-      } catch (err) {
-        if (cancelled) {
-          return;
-        }
-        const message = err instanceof Error ? err.message : 'Failed to load article';
-        if (message.includes('canceled') || message.includes('Canceled')) {
-          return;
-        }
-        console.error(LOG, 'article load failed', articleId, err);
+    }
+
+    try {
+      const result = await fetchArticleById(articleId);
+      if (result) {
+        setArticle(result);
+        setError(null);
+      } else if (!bundled) {
+        setError('Article not found');
+        setArticle(null);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load article';
+      if (message.includes('canceled') || message.includes('Canceled')) {
+        return;
+      }
+      devWarn(LOG, 'article load failed', articleId, err);
+      if (!bundled) {
         setError(message);
         setArticle(null);
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
       }
-    })();
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
+    } finally {
+      setLoading(false);
+    }
   }, [articleId]);
 
-  return { article, loading, error };
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { article, loading, error, retry: load };
 }
