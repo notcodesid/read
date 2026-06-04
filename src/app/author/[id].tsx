@@ -1,11 +1,13 @@
 import * as WebBrowser from 'expo-web-browser';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback } from 'react';
 import { Pressable, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AuthorAvatar } from '@/components/author-avatar';
 import { ReadingCover, ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useAuthorArticles } from '@/hooks/use-articles';
+import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTheme } from '@/hooks/use-theme';
 import type { ArticleSummary } from '@/types/article';
 
@@ -15,6 +17,13 @@ export default function AuthorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const authorId = typeof id === 'string' ? id : undefined;
   const { author, sections, refreshing, error, refresh } = useAuthorArticles(authorId);
+  const { refresh: refreshProgress, isArticleCompleted, getThemeProgress } = useReadingProgress();
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshProgress();
+    }, [refreshProgress]),
+  );
 
   const listSections = sections.map((section) => ({
     title: section.category,
@@ -92,16 +101,45 @@ export default function AuthorScreen() {
           style={styles.list}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={listHeader}
-          renderSectionHeader={({ section }) => (
-            <Text style={[styles.categoryLabel, { color: theme.textSecondary }]}>
-              {section.title} · {section.data.length}
-            </Text>
-          )}
+          renderSectionHeader={({ section }) => {
+            const articleIds = section.data.map((item) => item.id);
+            const progress =
+              authorId && section.title
+                ? getThemeProgress(authorId, section.title, articleIds)
+                : null;
+
+            return (
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.categoryLabel, { color: theme.textSecondary }]}>
+                  {section.title}
+                </Text>
+                {progress ? (
+                  <Text
+                    style={[
+                      styles.sectionProgress,
+                      {
+                        color: progress.isComplete ? theme.text : theme.textSecondary,
+                      },
+                    ]}>
+                    {progress.isComplete
+                      ? 'Complete'
+                      : `${progress.completed}/${progress.total}`}
+                  </Text>
+                ) : (
+                  <Text style={[styles.sectionProgress, { color: theme.textSecondary }]}>
+                    {section.data.length}
+                  </Text>
+                )}
+              </View>
+            );
+          }}
           renderItem={({ item }) => (
             <ArticleRow
               article={item}
               borderColor={theme.border}
               textColor={theme.text}
+              metaColor={theme.textSecondary}
+              completed={isArticleCompleted(item.id)}
               onPress={() => router.push(`/read/${item.id}`)}
             />
           )}
@@ -116,11 +154,15 @@ function ArticleRow({
   article,
   borderColor,
   textColor,
+  metaColor,
+  completed,
   onPress,
 }: {
   article: ArticleSummary;
   borderColor: string;
   textColor: string;
+  metaColor: string;
+  completed: boolean;
   onPress: () => void;
 }) {
   return (
@@ -133,9 +175,16 @@ function ArticleRow({
         { borderBottomColor: borderColor },
         pressed && styles.rowPressed,
       ]}>
-      <Text style={[styles.title, { color: textColor }]} numberOfLines={2}>
+      <Text
+        style={[styles.title, { color: completed ? metaColor : textColor }]}
+        numberOfLines={2}>
         {article.title}
       </Text>
+      {completed ? (
+        <Text style={[styles.readMark, { color: metaColor }]} accessibilityLabel="Read">
+          ✓
+        </Text>
+      ) : null}
     </Pressable>
   );
 }
@@ -203,25 +252,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    marginTop: 4,
+    gap: 12,
+  },
   categoryLabel: {
+    flex: 1,
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    marginBottom: 8,
-    marginTop: 4,
+  },
+  sectionProgress: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.25,
+    textTransform: 'uppercase',
   },
   sectionGap: {
     height: 20,
   },
   row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  readMark: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   rowPressed: {
     opacity: 0.6,
   },
   title: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '500',
     lineHeight: 20,
