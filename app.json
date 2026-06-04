@@ -13,7 +13,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Read connects to your Mac on the local network to load updates while developing.",
-        "BonjourServices": ["_expo._tcp"]
+        "BonjourServices": [
+          "_expo._tcp"
+        ]
       }
     },
     "android": {
@@ -48,7 +50,8 @@
             "backgroundColor": "#141312"
           }
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

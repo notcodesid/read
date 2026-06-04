@@ -7,9 +7,9 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Alert,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -26,6 +26,7 @@ import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTheme } from '@/hooks/use-theme';
 import { getBundledSummaries } from '@/lib/articles';
 import { highlightsToMarkdown } from '@/lib/export-highlights';
+import { exportHighlightsToFile } from '@/lib/export-highlights-file';
 import { countArticleWords } from '@/lib/resolve-reading-styles';
 import { recordReadingSession, estimateReadingMinutes } from '@/lib/reading-wpm';
 import { loadScrollPosition, saveScrollPosition } from '@/lib/scroll-position';
@@ -226,19 +227,29 @@ export default function ReaderScreen() {
 
   const exportHighlights = useCallback(async () => {
     if (!article || highlights.length === 0) {
+      Alert.alert('No highlights', 'Highlight some text first, then export.');
       return;
     }
 
-    const markdown = highlightsToMarkdown(
-      article.title,
-      highlights,
-      article.author ?? article.source,
-    );
-    await Share.share({
-      message: markdown,
-      title: `Highlights — ${article.title}`,
-    });
     setSettingsOpen(false);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    try {
+      const markdown = highlightsToMarkdown(
+        article.title,
+        highlights,
+        article.author ?? article.source,
+      );
+      const result = await exportHighlightsToFile(article.title, markdown);
+
+      Alert.alert(
+        'Highlights exported',
+        `Copied to clipboard.\n\nIn the share sheet, choose Save to Files (or Notes) to download ${result.fileName}.`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not export highlights';
+      Alert.alert('Export failed', message);
+    }
   }, [article, highlights]);
 
   const contentStyle = {

@@ -268,7 +268,7 @@ export function ReadingSettingsSheet({
                   Export highlights ({highlightCount})
                 </Text>
                 <Text style={[styles.exportMeta, { color: theme.textSecondary }]}>
-                  Markdown · share sheet
+                  Saves .md file · clipboard · share sheet
                 </Text>
               </Pressable>
             ) : null}
