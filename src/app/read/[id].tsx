@@ -29,6 +29,7 @@ import { highlightsToMarkdown } from '@/lib/export-highlights';
 import { exportHighlightsToFile } from '@/lib/export-highlights-file';
 import { countArticleWords } from '@/lib/resolve-reading-styles';
 import { recordReadingSession, estimateReadingMinutes } from '@/lib/reading-wpm';
+import { touchArticleVisit } from '@/lib/continue-reading';
 import { loadScrollPosition, saveScrollPosition } from '@/lib/scroll-position';
 
 const SCROLL_END_THRESHOLD = 48;
@@ -67,6 +68,8 @@ export default function ReaderScreen() {
     if (!articleId) {
       return;
     }
+
+    void touchArticleVisit(articleId);
 
     loadScrollPosition(articleId).then((offsetY) => {
       if (offsetY > 0) {

@@ -12,15 +12,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
 import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
+import { ContinueReadingRow } from '@/components/home/continue-reading-row';
 import { ReadingSettingsSheet } from '@/components/reader/reading-settings-sheet';
 import { ReadingLayout } from '@/constants/reading';
 import { useAuthorShelf } from '@/hooks/use-author-shelf';
+import { useContinueReading } from '@/hooks/use-continue-reading';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { sections, unassignedAuthors, refreshing, error, refresh } = useAuthorShelf();
+  const { items: continueReading } = useContinueReading();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const hasAuthors =
@@ -60,6 +63,15 @@ export default function HomeScreen() {
           ) : null}
 
           <View style={styles.shelves}>
+            <ContinueReadingRow
+              items={continueReading}
+              textColor={theme.text}
+              metaColor={theme.textSecondary}
+              borderColor={theme.border}
+              surfaceColor={theme.backgroundElement}
+              onArticlePress={(articleId) => router.push(`/read/${articleId}`)}
+            />
+
             {sections.map((section) => (
               <AuthorGroupCarousel
                 key={section.group.id}
