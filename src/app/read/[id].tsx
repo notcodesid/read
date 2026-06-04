@@ -1,15 +1,11 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import {
-  HighlightableArticleBody,
-  type HighlightableArticleBodyHandle,
-} from '@/components/reader/highlightable-article-body';
-import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
+import { HighlightableArticleBody } from '@/components/reader/highlightable-article-body';
 import { getBundledHeroImageSource } from '@/constants/article-images';
 import { ReadingLayout, ReadingTypography } from '@/constants/reading';
 import { useArticle } from '@/hooks/use-articles';
@@ -22,16 +18,10 @@ export default function ReaderScreen() {
   const articleId = typeof id === 'string' ? id : undefined;
   const { article, loading, error, retry } = useArticle(articleId);
   const { highlights, addHighlight, removeHighlight } = useHighlights(articleId);
-  const bodyRef = useRef<HighlightableArticleBodyHandle>(null);
   const [selecting, setSelecting] = useState(false);
-  const [selectionPreview, setSelectionPreview] = useState('');
 
   const handleSelectingChange = useCallback((value: boolean) => {
     setSelecting(value);
-  }, []);
-
-  const handleSelectionPreviewChange = useCallback((preview: string) => {
-    setSelectionPreview(preview);
   }, []);
 
   if (loading && !article) {
@@ -73,10 +63,8 @@ export default function ReaderScreen() {
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[
-            styles.content,
-            selecting && styles.contentWithToolbar,
-          ]}
+          contentContainerStyle={styles.content}
+          scrollEnabled={!selecting}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {article.category ? (
@@ -101,7 +89,6 @@ export default function ReaderScreen() {
           <View style={styles.body}>
             {hasBody ? (
               <HighlightableArticleBody
-                ref={bodyRef}
                 articleId={article.id}
                 paragraphs={article.paragraphs}
                 highlights={highlights}
@@ -110,7 +97,6 @@ export default function ReaderScreen() {
                 onAddHighlight={addHighlight}
                 onRemoveHighlight={removeHighlight}
                 onSelectingChange={handleSelectingChange}
-                onSelectionPreviewChange={handleSelectionPreviewChange}
               />
             ) : (
               <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
@@ -131,14 +117,6 @@ export default function ReaderScreen() {
             </Pressable>
           ) : null}
         </ScrollView>
-
-        {selecting ? (
-          <HighlightToolbar
-            selectionPreview={selectionPreview}
-            onHighlight={() => bodyRef.current?.saveHighlight()}
-            onCancel={() => bodyRef.current?.cancelSelection()}
-          />
-        ) : null}
       </SafeAreaView>
     </>
   );
@@ -177,9 +155,6 @@ const styles = StyleSheet.create({
     maxWidth: ReadingLayout.maxWidth,
     width: '100%',
     alignSelf: 'center',
-  },
-  contentWithToolbar: {
-    paddingBottom: ReadingLayout.insetBottom + 120,
   },
   category: {
     ...ReadingTypography.meta,

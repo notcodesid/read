@@ -56,6 +56,47 @@ export function isWordInSelection(
   return comparePointers(pointer, start) >= 0 && comparePointers(pointer, end) <= 0;
 }
 
+export type WordScreenLayout = {
+  paragraphIndex: number;
+  wordIndex: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const NEAREST_WORD_MAX_PX = 44;
+
+/** Map a screen-space touch to the word under the finger (with nearest-word snap). */
+export function findWordPointerAtPoint(
+  layouts: Iterable<WordScreenLayout>,
+  x: number,
+  y: number,
+): WordPointer | null {
+  let nearest: { dist: number; pointer: WordPointer } | null = null;
+
+  for (const layout of layouts) {
+    const { paragraphIndex, wordIndex, x: left, y: top, width, height } = layout;
+
+    if (x >= left && x <= left + width && y >= top && y <= top + height) {
+      return { paragraphIndex, wordIndex };
+    }
+
+    const cx = left + width / 2;
+    const cy = top + height / 2;
+    const dist = Math.hypot(x - cx, y - cy);
+    if (!nearest || dist < nearest.dist) {
+      nearest = { dist, pointer: { paragraphIndex, wordIndex } };
+    }
+  }
+
+  if (nearest && nearest.dist <= NEAREST_WORD_MAX_PX) {
+    return nearest.pointer;
+  }
+
+  return null;
+}
+
 export function createHighlightId(): string {
   return `hl_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 }

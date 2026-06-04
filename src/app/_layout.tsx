@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { View } from 'react-native';
 import { useColorScheme } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LaunchSplash } from '@/components/launch-splash';
 import { ReadingColors } from '@/constants/reading';
@@ -38,6 +39,7 @@ export default function RootLayout() {
   const theme = colorScheme === 'dark' ? dark : light;
 
   return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
     <ThemeProvider value={colorScheme === 'dark' ? DarkReadingTheme : LightTheme}>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
@@ -54,5 +56,6 @@ export default function RootLayout() {
         <LaunchSplash />
       </View>
     </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
