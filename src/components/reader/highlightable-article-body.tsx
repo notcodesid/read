@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
@@ -42,7 +42,10 @@ export function HighlightableArticleBody({
   const scheme = useColorScheme();
   const highlightPalette = ReadingHighlight[scheme === 'dark' ? 'dark' : 'light'];
 
+  const bodyRef = useRef<View>(null);
   const wordLayoutsRef = useRef<Map<string, WordScreenLayout>>(new Map());
+  const measurersRef = useRef<Map<string, (onDone?: () => void) => void>>(new Map());
+
   const [selecting, setSelecting] = useState(false);
   const [anchor, setAnchor] = useState<WordPointer | null>(null);
   const [focus, setFocus] = useState<WordPointer | null>(null);
@@ -111,22 +114,67 @@ export function HighlightableArticleBody({
     }
   }, [cancelSelection]);
 
+  const registerWordLayout = useCallback((key: string, layout: WordScreenLayout) => {
+    wordLayoutsRef.current.set(key, layout);
+  }, []);
+
+  const unregisterWordLayout = useCallback((key: string) => {
+    wordLayoutsRef.current.delete(key);
+  }, []);
+
+  const registerMeasurer = useCallback(
+    (key: string, measure: (onDone?: () => void) => void) => {
+      measurersRef.current.set(key, measure);
+    },
+    [],
+  );
+
+  const unregisterMeasurer = useCallback((key: string) => {
+    measurersRef.current.delete(key);
+  }, []);
+
+  const remeasureAllLayouts = useCallback(() => {
+    const measurers = Array.from(measurersRef.current.values());
+    if (measurers.length === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      let pending = measurers.length;
+      const done = () => {
+        pending -= 1;
+        if (pending === 0) {
+          resolve();
+        }
+      };
+
+      for (const measure of measurers) {
+        measure(done);
+      }
+    });
+  }, []);
+
   const pointerAt = useCallback((x: number, y: number) => {
     return findWordPointerAtPoint(wordLayoutsRef.current.values(), x, y);
   }, []);
 
   const handleGestureStart = useCallback(
     (x: number, y: number) => {
-      const pointer = pointerAt(x, y);
-      if (pointer) {
-        beginSelection(pointer);
-      }
+      remeasureAllLayouts().then(() => {
+        const pointer = pointerAt(x, y);
+        if (pointer) {
+          beginSelection(pointer);
+        }
+      });
     },
-    [beginSelection, pointerAt],
+    [beginSelection, pointerAt, remeasureAllLayouts],
   );
 
   const handleGestureUpdate = useCallback(
     (x: number, y: number) => {
+      if (!selectingRef.current) {
+        return;
+      }
       const pointer = pointerAt(x, y);
       if (pointer) {
         updateFocus(pointer);
@@ -135,13 +183,9 @@ export function HighlightableArticleBody({
     [pointerAt, updateFocus],
   );
 
-  const registerWordLayout = useCallback((key: string, layout: WordScreenLayout) => {
-    wordLayoutsRef.current.set(key, layout);
-  }, []);
-
-  const unregisterWordLayout = useCallback((key: string) => {
-    wordLayoutsRef.current.delete(key);
-  }, []);
+  const remeasureAfterLayout = useCallback(() => {
+    remeasureAllLayouts();
+  }, [remeasureAllLayouts]);
 
   /* eslint-disable react-hooks/refs -- gesture runs on touch; layout ref read in handlers only */
   const selectionGesture = useMemo(
@@ -151,10 +195,10 @@ export function HighlightableArticleBody({
         .activateAfterLongPress(LONG_PRESS_MS)
         .minDistance(0)
         .onStart((event) => {
-          handleGestureStart(event.absoluteX, event.absoluteY);
+          handleGestureStart(event.x, event.y);
         })
         .onUpdate((event) => {
-          handleGestureUpdate(event.absoluteX, event.absoluteY);
+          handleGestureUpdate(event.x, event.y);
         })
         .onEnd(() => {
           commitSelection();
@@ -187,10 +231,15 @@ export function HighlightableArticleBody({
       </Text>
 
       <GestureDetector gesture={selectionGesture}>
-        <View style={styles.body}>
+        <View
+          ref={bodyRef}
+          collapsable={false}
+          style={styles.body}
+          onLayout={remeasureAfterLayout}>
           {paragraphs.map((paragraph, paragraphIndex) => (
             <ParagraphWords
               key={paragraphIndex}
+              bodyRef={bodyRef}
               paragraph={paragraph}
               paragraphIndex={paragraphIndex}
               isFirst={paragraphIndex === 0}
@@ -203,6 +252,8 @@ export function HighlightableArticleBody({
               focus={focus}
               onRegisterLayout={registerWordLayout}
               onUnregisterLayout={unregisterWordLayout}
+              onRegisterMeasurer={registerMeasurer}
+              onUnregisterMeasurer={unregisterMeasurer}
               onOpenHighlight={openHighlight}
             />
           ))}
@@ -220,6 +271,7 @@ export function HighlightableArticleBody({
 }
 
 type ParagraphWordsProps = {
+  bodyRef: RefObject<View | null>;
   paragraph: string;
   paragraphIndex: number;
   isFirst: boolean;
@@ -232,10 +284,13 @@ type ParagraphWordsProps = {
   focus: WordPointer | null;
   onRegisterLayout: (key: string, layout: WordScreenLayout) => void;
   onUnregisterLayout: (key: string) => void;
+  onRegisterMeasurer: (key: string, measure: (onDone?: () => void) => void) => void;
+  onUnregisterMeasurer: (key: string) => void;
   onOpenHighlight: (highlightId: string) => void;
 };
 
 function ParagraphWords({
+  bodyRef,
   paragraph,
   paragraphIndex,
   isFirst,
@@ -248,6 +303,8 @@ function ParagraphWords({
   focus,
   onRegisterLayout,
   onUnregisterLayout,
+  onRegisterMeasurer,
+  onUnregisterMeasurer,
   onOpenHighlight,
 }: ParagraphWordsProps) {
   const tokens = useMemo(() => tokenizeParagraph(paragraph), [paragraph]);
@@ -271,6 +328,7 @@ function ParagraphWords({
         {tokens.map((token) => (
           <WordChip
             key={`${paragraphIndex}-${token.wordIndex}`}
+            bodyRef={bodyRef}
             token={token}
             paragraphIndex={paragraphIndex}
             paragraphLength={paragraph.length}
@@ -283,6 +341,8 @@ function ParagraphWords({
             focus={focus}
             onRegisterLayout={onRegisterLayout}
             onUnregisterLayout={onUnregisterLayout}
+            onRegisterMeasurer={onRegisterMeasurer}
+            onUnregisterMeasurer={onUnregisterMeasurer}
             onOpenHighlight={onOpenHighlight}
           />
         ))}
@@ -292,6 +352,7 @@ function ParagraphWords({
 }
 
 type WordChipProps = {
+  bodyRef: RefObject<View | null>;
   token: WordToken;
   paragraphIndex: number;
   paragraphLength: number;
@@ -304,10 +365,13 @@ type WordChipProps = {
   focus: WordPointer | null;
   onRegisterLayout: (key: string, layout: WordScreenLayout) => void;
   onUnregisterLayout: (key: string) => void;
+  onRegisterMeasurer: (key: string, measure: (onDone?: () => void) => void) => void;
+  onUnregisterMeasurer: (key: string) => void;
   onOpenHighlight: (highlightId: string) => void;
 };
 
 function WordChip({
+  bodyRef,
   token,
   paragraphIndex,
   paragraphLength,
@@ -320,6 +384,8 @@ function WordChip({
   focus,
   onRegisterLayout,
   onUnregisterLayout,
+  onRegisterMeasurer,
+  onUnregisterMeasurer,
   onOpenHighlight,
 }: WordChipProps) {
   const viewRef = useRef<View>(null);
@@ -346,26 +412,52 @@ function WordChip({
   const isSelected =
     selecting && anchor && focus && isWordInSelection(pointer, anchor, focus);
 
-  const measureLayout = useCallback(() => {
-    viewRef.current?.measureInWindow((x, y, width, height) => {
-      if (width <= 0 || height <= 0) {
+  const measureLayout = useCallback(
+    (onDone?: () => void) => {
+      const wordNode = viewRef.current;
+      const bodyNode = bodyRef.current;
+
+      if (!wordNode || !bodyNode) {
+        onDone?.();
         return;
       }
-      onRegisterLayout(layoutKey, {
-        paragraphIndex,
-        wordIndex: token.wordIndex,
-        x,
-        y,
-        width,
-        height,
-      });
-    });
-  }, [layoutKey, onRegisterLayout, paragraphIndex, token.wordIndex]);
+
+      wordNode.measureLayout(
+        bodyNode,
+        (x, y, width, height) => {
+          if (width > 0 && height > 0) {
+            onRegisterLayout(layoutKey, {
+              paragraphIndex,
+              wordIndex: token.wordIndex,
+              x,
+              y,
+              width,
+              height,
+            });
+          }
+          onDone?.();
+        },
+        () => onDone?.(),
+      );
+    },
+    [bodyRef, layoutKey, onRegisterLayout, paragraphIndex, token.wordIndex],
+  );
 
   useEffect(() => {
+    onRegisterMeasurer(layoutKey, measureLayout);
     measureLayout();
-    return () => onUnregisterLayout(layoutKey);
-  }, [layoutKey, measureLayout, onUnregisterLayout]);
+
+    return () => {
+      onUnregisterMeasurer(layoutKey);
+      onUnregisterLayout(layoutKey);
+    };
+  }, [
+    layoutKey,
+    measureLayout,
+    onRegisterMeasurer,
+    onUnregisterLayout,
+    onUnregisterMeasurer,
+  ]);
 
   const handlePress = () => {
     if (selecting || !highlightId) {
@@ -375,7 +467,7 @@ function WordChip({
   };
 
   return (
-    <View ref={viewRef} collapsable={false} onLayout={measureLayout}>
+    <View ref={viewRef} collapsable={false} onLayout={() => measureLayout()}>
       <Pressable
         onPress={handlePress}
         disabled={selecting}

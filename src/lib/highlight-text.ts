@@ -65,33 +65,94 @@ export type WordScreenLayout = {
   height: number;
 };
 
-const NEAREST_WORD_MAX_PX = 44;
+const Y_HIT_PAD = 4;
+const LINE_BAND_PAD = 6;
+const MAX_FALLBACK_SCORE = 72;
 
-/** Map a screen-space touch to the word under the finger (with nearest-word snap). */
+function verticalDistanceToRect(y: number, top: number, height: number): number {
+  if (y < top) {
+    return top - y;
+  }
+  if (y > top + height) {
+    return y - (top + height);
+  }
+  return 0;
+}
+
+function pointerFromLayout(layout: WordScreenLayout): WordPointer {
+  return { paragraphIndex: layout.paragraphIndex, wordIndex: layout.wordIndex };
+}
+
+function pickClosestHorizontal(layouts: WordScreenLayout[], x: number): WordPointer {
+  let best = layouts[0];
+  let bestDist = Math.abs(x - (best.x + best.width / 2));
+
+  for (let i = 1; i < layouts.length; i++) {
+    const layout = layouts[i];
+    const dist = Math.abs(x - (layout.x + layout.width / 2));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = layout;
+    }
+  }
+
+  return pointerFromLayout(best);
+}
+
+/**
+ * Map a touch point to a word. Coordinates must match layout space (e.g. both
+ * relative to the article body). Prefers the line under the finger, not the
+ * nearest word by center distance (which wrongly snaps to the line above).
+ */
 export function findWordPointerAtPoint(
   layouts: Iterable<WordScreenLayout>,
   x: number,
   y: number,
 ): WordPointer | null {
-  let nearest: { dist: number; pointer: WordPointer } | null = null;
+  const list = Array.from(layouts);
+  if (list.length === 0) {
+    return null;
+  }
 
-  for (const layout of layouts) {
-    const { paragraphIndex, wordIndex, x: left, y: top, width, height } = layout;
+  const directHits = list.filter(
+    (layout) =>
+      x >= layout.x &&
+      x <= layout.x + layout.width &&
+      y >= layout.y - Y_HIT_PAD &&
+      y <= layout.y + layout.height + Y_HIT_PAD,
+  );
+  if (directHits.length > 0) {
+    return pickClosestHorizontal(directHits, x);
+  }
 
-    if (x >= left && x <= left + width && y >= top && y <= top + height) {
-      return { paragraphIndex, wordIndex };
-    }
+  let minVertical = Infinity;
+  for (const layout of list) {
+    minVertical = Math.min(
+      minVertical,
+      verticalDistanceToRect(y, layout.y, layout.height),
+    );
+  }
 
-    const cx = left + width / 2;
-    const cy = top + height / 2;
-    const dist = Math.hypot(x - cx, y - cy);
-    if (!nearest || dist < nearest.dist) {
-      nearest = { dist, pointer: { paragraphIndex, wordIndex } };
+  const lineCandidates = list.filter(
+    (layout) =>
+      verticalDistanceToRect(y, layout.y, layout.height) <= minVertical + LINE_BAND_PAD,
+  );
+  if (lineCandidates.length > 0) {
+    return pickClosestHorizontal(lineCandidates, x);
+  }
+
+  let best: { score: number; pointer: WordPointer } | null = null;
+  for (const layout of list) {
+    const vertical = verticalDistanceToRect(y, layout.y, layout.height);
+    const horizontal = Math.abs(x - (layout.x + layout.width / 2));
+    const score = vertical * 6 + horizontal;
+    if (!best || score < best.score) {
+      best = { score, pointer: pointerFromLayout(layout) };
     }
   }
 
-  if (nearest && nearest.dist <= NEAREST_WORD_MAX_PX) {
-    return nearest.pointer;
+  if (best && best.score <= MAX_FALLBACK_SCORE) {
+    return best.pointer;
   }
 
   return null;
