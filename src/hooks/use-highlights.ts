@@ -4,6 +4,7 @@ import {
   addHighlight as persistHighlight,
   loadHighlights,
   removeHighlight as persistRemoveHighlight,
+  updateHighlight as persistUpdateHighlight,
 } from '@/lib/highlights-storage';
 import type { Highlight } from '@/types/highlight';
 
@@ -47,5 +48,16 @@ export function useHighlights(articleId: string | undefined) {
     setHighlights(next);
   }, [articleId]);
 
-  return { highlights, ready, addHighlight, removeHighlight };
+  const updateHighlight = useCallback(
+    async (highlightId: string, patch: Partial<Pick<Highlight, 'color' | 'label' | 'note'>>) => {
+      if (!articleId) {
+        return;
+      }
+      const next = await persistUpdateHighlight(articleId, highlightId, patch);
+      setHighlights(next);
+    },
+    [articleId],
+  );
+
+  return { highlights, ready, addHighlight, removeHighlight, updateHighlight };
 }

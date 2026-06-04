@@ -3,8 +3,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 import { HighlightActionsSheet } from '@/components/reader/highlight-actions-sheet';
-import { ReadingHighlight, ReadingTypography } from '@/constants/reading';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import {
   buildHighlightFromSelection,
   findWordPointerAtPoint,
@@ -14,7 +12,16 @@ import {
   type WordScreenLayout,
   type WordToken,
 } from '@/lib/highlight-text';
+import type { HighlightColorId, HighlightLabel } from '@/types/reading-preferences';
 import type { Highlight, WordPointer } from '@/types/highlight';
+
+export type ReaderTypography = {
+  bodyFontFamily: string | undefined;
+  bodySize: number;
+  bodyLineHeight: number;
+  paragraphGap: number;
+  meta: { fontSize: number; lineHeight: number; letterSpacing: number };
+};
 
 const LONG_PRESS_MS = 380;
 
@@ -24,8 +31,16 @@ type HighlightableArticleBodyProps = {
   highlights: Highlight[];
   textColor: string;
   metaColor: string;
+  typography: ReaderTypography;
+  highlightDefaults: { color: HighlightColorId; label: HighlightLabel | null };
+  getHighlightFill: (color: HighlightColorId) => string;
+  getHighlightSelectingFill: (color: HighlightColorId) => string;
   onAddHighlight: (highlight: Highlight) => void;
   onRemoveHighlight: (highlightId: string) => void;
+  onUpdateHighlight: (
+    highlightId: string,
+    patch: Partial<Pick<Highlight, 'color' | 'label' | 'note'>>,
+  ) => void;
   onSelectingChange?: (selecting: boolean) => void;
 };
 
@@ -35,13 +50,15 @@ export function HighlightableArticleBody({
   highlights,
   textColor,
   metaColor,
+  typography,
+  highlightDefaults,
+  getHighlightFill,
+  getHighlightSelectingFill,
   onAddHighlight,
   onRemoveHighlight,
+  onUpdateHighlight,
   onSelectingChange,
 }: HighlightableArticleBodyProps) {
-  const scheme = useColorScheme();
-  const highlightPalette = ReadingHighlight[scheme === 'dark' ? 'dark' : 'light'];
-
   const bodyRef = useRef<View>(null);
   const wordLayoutsRef = useRef<Map<string, WordScreenLayout>>(new Map());
   const measurersRef = useRef<Map<string, (onDone?: () => void) => void>>(new Map());
@@ -100,13 +117,16 @@ export function HighlightableArticleBody({
       return;
     }
 
-    const draft = buildHighlightFromSelection(articleId, paragraphs, lo, hi);
+    const draft = buildHighlightFromSelection(articleId, paragraphs, lo, hi, {
+      color: highlightDefaults.color,
+      label: highlightDefaults.label,
+    });
     cancelSelection();
 
     if (draft) {
       onAddHighlight(draft);
     }
-  }, [articleId, cancelSelection, onAddHighlight, paragraphs]);
+  }, [articleId, cancelSelection, highlightDefaults, onAddHighlight, paragraphs]);
 
   const handleGestureFinalize = useCallback(() => {
     if (selectingRef.current) {
@@ -222,7 +242,12 @@ export function HighlightableArticleBody({
 
   return (
     <>
-      <Text style={[styles.selectionHint, { color: metaColor }]}>
+      <Text
+        style={[
+          styles.selectionHint,
+          typography.meta,
+          { color: metaColor, fontFamily: typography.bodyFontFamily },
+        ]}>
         {selecting
           ? 'Drag to the end of the passage, then release'
           : highlights.length > 0
@@ -244,9 +269,10 @@ export function HighlightableArticleBody({
               paragraphIndex={paragraphIndex}
               isFirst={paragraphIndex === 0}
               textColor={textColor}
+              typography={typography}
               highlights={highlights}
-              highlightFill={highlightPalette.fill}
-              highlightSelecting={highlightPalette.fillSelecting}
+              getHighlightFill={getHighlightFill}
+              getHighlightSelectingFill={getHighlightSelectingFill}
               selecting={selecting}
               anchor={anchor}
               focus={focus}
@@ -265,6 +291,7 @@ export function HighlightableArticleBody({
         visible={activeHighlight !== null}
         onClose={() => setActiveHighlightId(null)}
         onRemove={onRemoveHighlight}
+        onUpdate={onUpdateHighlight}
       />
     </>
   );
@@ -276,9 +303,10 @@ type ParagraphWordsProps = {
   paragraphIndex: number;
   isFirst: boolean;
   textColor: string;
+  typography: ReaderTypography;
   highlights: Highlight[];
-  highlightFill: string;
-  highlightSelecting: string;
+  getHighlightFill: (color: HighlightColorId) => string;
+  getHighlightSelectingFill: (color: HighlightColorId) => string;
   selecting: boolean;
   anchor: WordPointer | null;
   focus: WordPointer | null;
@@ -295,9 +323,10 @@ function ParagraphWords({
   paragraphIndex,
   isFirst,
   textColor,
+  typography,
   highlights,
-  highlightFill,
-  highlightSelecting,
+  getHighlightFill,
+  getHighlightSelectingFill,
   selecting,
   anchor,
   focus,
@@ -314,8 +343,13 @@ function ParagraphWords({
       <Text
         style={[
           styles.paragraphFallback,
-          { color: textColor },
-          !isFirst && styles.paragraphSpacing,
+          {
+            color: textColor,
+            fontFamily: typography.bodyFontFamily,
+            fontSize: typography.bodySize,
+            lineHeight: typography.bodyLineHeight,
+          },
+          !isFirst && { marginTop: typography.paragraphGap },
         ]}>
         {paragraph}
       </Text>
@@ -323,7 +357,7 @@ function ParagraphWords({
   }
 
   return (
-    <View style={[styles.paragraph, !isFirst && styles.paragraphSpacing]}>
+    <View style={[styles.paragraph, !isFirst && { marginTop: typography.paragraphGap }]}>
       <View style={styles.wordRow}>
         {tokens.map((token) => (
           <WordChip
@@ -333,9 +367,10 @@ function ParagraphWords({
             paragraphIndex={paragraphIndex}
             paragraphLength={paragraph.length}
             textColor={textColor}
+            typography={typography}
             highlights={highlights}
-            highlightFill={highlightFill}
-            highlightSelecting={highlightSelecting}
+            getHighlightFill={getHighlightFill}
+            getHighlightSelectingFill={getHighlightSelectingFill}
             selecting={selecting}
             anchor={anchor}
             focus={focus}
@@ -357,9 +392,10 @@ type WordChipProps = {
   paragraphIndex: number;
   paragraphLength: number;
   textColor: string;
+  typography: ReaderTypography;
   highlights: Highlight[];
-  highlightFill: string;
-  highlightSelecting: string;
+  getHighlightFill: (color: HighlightColorId) => string;
+  getHighlightSelectingFill: (color: HighlightColorId) => string;
   selecting: boolean;
   anchor: WordPointer | null;
   focus: WordPointer | null;
@@ -376,9 +412,10 @@ function WordChip({
   paragraphIndex,
   paragraphLength,
   textColor,
+  typography,
   highlights,
-  highlightFill,
-  highlightSelecting,
+  getHighlightFill,
+  getHighlightSelectingFill,
   selecting,
   anchor,
   focus,
@@ -392,7 +429,7 @@ function WordChip({
   const layoutKey = `${paragraphIndex}:${token.wordIndex}`;
   const pointer = { paragraphIndex, wordIndex: token.wordIndex };
 
-  const highlightId = useMemo(() => {
+  const matchedHighlight = useMemo(() => {
     for (const highlight of highlights) {
       const interval = highlightIntervalInParagraph(
         highlight,
@@ -403,14 +440,20 @@ function WordChip({
         continue;
       }
       if (token.start < interval.end && token.end > interval.start) {
-        return highlight.id;
+        return highlight;
       }
     }
     return undefined;
   }, [highlights, paragraphIndex, paragraphLength, token.end, token.start]);
 
+  const highlightId = matchedHighlight?.id;
+  const highlightFill = matchedHighlight
+    ? getHighlightFill(matchedHighlight.color)
+    : undefined;
+
   const isSelected =
     selecting && anchor && focus && isWordInSelection(pointer, anchor, focus);
+  const selectingFill = getHighlightSelectingFill(matchedHighlight?.color ?? 'yellow');
 
   const measureLayout = useCallback(
     (onDone?: () => void) => {
@@ -476,9 +519,14 @@ function WordChip({
         <Text
           style={[
             styles.word,
-            { color: textColor },
+            {
+              color: textColor,
+              fontFamily: typography.bodyFontFamily,
+              fontSize: typography.bodySize,
+              lineHeight: typography.bodyLineHeight,
+            },
             highlightId && !selecting && { backgroundColor: highlightFill },
-            isSelected && { backgroundColor: highlightSelecting },
+            isSelected && { backgroundColor: selectingFill },
           ]}>
           {token.text}
           {' '}
@@ -490,7 +538,6 @@ function WordChip({
 
 const styles = StyleSheet.create({
   selectionHint: {
-    ...ReadingTypography.meta,
     marginBottom: 14,
   },
   body: {
@@ -499,13 +546,7 @@ const styles = StyleSheet.create({
   paragraph: {
     width: '100%',
   },
-  paragraphSpacing: {
-    marginTop: ReadingTypography.paragraphGap,
-  },
   paragraphFallback: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: ReadingTypography.bodySize,
-    lineHeight: ReadingTypography.bodyLineHeight,
     letterSpacing: 0.1,
   },
   wordRow: {
@@ -514,9 +555,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   word: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: ReadingTypography.bodySize,
-    lineHeight: ReadingTypography.bodyLineHeight,
     letterSpacing: 0.1,
   },
 });

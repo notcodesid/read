@@ -1,9 +1,9 @@
+import type { HighlightColorId, HighlightLabel } from '@/types/reading-preferences';
+
 export type TextAnchor = {
   paragraphIndex: number;
   offset: number;
 };
-
-export type HighlightColor = 'default';
 
 export type Highlight = {
   id: string;
@@ -11,7 +11,9 @@ export type Highlight = {
   start: TextAnchor;
   end: TextAnchor;
   quote: string;
-  color: HighlightColor;
+  color: HighlightColorId;
+  label?: HighlightLabel;
+  note?: string;
   createdAt: string;
 };
 

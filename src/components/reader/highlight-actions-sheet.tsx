@@ -1,9 +1,19 @@
 import * as Clipboard from 'expo-clipboard';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  Modal,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ReadingLayout, ReadingTypography } from '@/constants/reading';
-import { useTheme } from '@/hooks/use-theme';
+import { HIGHLIGHT_LABELS } from '@/constants/reading-palettes';
+import { useReadingPreferences } from '@/contexts/reading-preferences-context';
+import type { HighlightColorId, HighlightLabel } from '@/types/reading-preferences';
 import type { Highlight } from '@/types/highlight';
 
 type HighlightActionsSheetProps = {
@@ -11,6 +21,7 @@ type HighlightActionsSheetProps = {
   visible: boolean;
   onClose: () => void;
   onRemove: (highlightId: string) => void;
+  onUpdate: (highlightId: string, patch: Partial<Pick<Highlight, 'color' | 'label' | 'note'>>) => void;
 };
 
 export function HighlightActionsSheet({
@@ -18,9 +29,15 @@ export function HighlightActionsSheet({
   visible,
   onClose,
   onRemove,
+  onUpdate,
 }: HighlightActionsSheetProps) {
-  const theme = useTheme();
+  const { theme, getHighlightStyle } = useReadingPreferences();
   const insets = useSafeAreaInsets();
+  const [noteDraft, setNoteDraft] = useState('');
+
+  useEffect(() => {
+    setNoteDraft(highlight?.note ?? '');
+  }, [highlight?.id, highlight?.note]);
 
   if (!highlight) {
     return null;
@@ -31,9 +48,27 @@ export function HighlightActionsSheet({
     onClose();
   };
 
+  const shareHighlight = async () => {
+    const tags = [highlight.label, highlight.color].filter(Boolean).join(', ');
+    const body = tags ? `${highlight.quote}\n\n— ${tags}` : highlight.quote;
+    await Share.share({ message: body });
+  };
+
   const remove = () => {
     onRemove(highlight.id);
     onClose();
+  };
+
+  const setColor = (color: HighlightColorId) => {
+    onUpdate(highlight.id, { color });
+  };
+
+  const setLabel = (label: HighlightLabel | undefined) => {
+    onUpdate(highlight.id, { label });
+  };
+
+  const saveNote = () => {
+    onUpdate(highlight.id, { note: noteDraft.trim() || undefined });
   };
 
   return (
@@ -53,25 +88,97 @@ export function HighlightActionsSheet({
             {highlight.quote}
           </Text>
 
+          <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Color</Text>
+          <View style={styles.chipRow}>
+            {(['yellow', 'green'] as const).map((colorId) => {
+              const swatch = getHighlightStyle(colorId);
+              const selected = highlight.color === colorId;
+              return (
+                <Pressable
+                  key={colorId}
+                  onPress={() => setColor(colorId)}
+                  style={[
+                    styles.colorChip,
+                    {
+                      borderColor: theme.border,
+                      backgroundColor: swatch.fill,
+                      opacity: selected ? 1 : 0.55,
+                    },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}>
+                  <Text style={[styles.chipText, { color: theme.text }]}>
+                    {colorId === 'yellow' ? 'Yellow' : 'Green'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Label</Text>
+          <View style={styles.chipRow}>
+            <Pressable
+              onPress={() => setLabel(undefined)}
+              style={[styles.chip, { borderColor: theme.border }]}>
+              <Text style={[styles.chipText, { color: theme.textSecondary }]}>None</Text>
+            </Pressable>
+            {HIGHLIGHT_LABELS.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() => setLabel(item.id)}
+                style={[
+                  styles.chip,
+                  {
+                    borderColor: theme.border,
+                    backgroundColor:
+                      highlight.label === item.id ? theme.backgroundSelected : 'transparent',
+                  },
+                ]}>
+                <Text style={[styles.chipText, { color: theme.text }]}>{item.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Note</Text>
+          <TextInput
+            value={noteDraft}
+            onChangeText={setNoteDraft}
+            onBlur={saveNote}
+            placeholder="Add a short note…"
+            placeholderTextColor={theme.textSecondary}
+            multiline
+            style={[
+              styles.noteInput,
+              {
+                color: theme.text,
+                borderColor: theme.border,
+                backgroundColor: theme.background,
+              },
+            ]}
+          />
+
           <View style={styles.actions}>
             <Pressable
               onPress={copyQuote}
               accessibilityRole="button"
-              accessibilityLabel="Copy highlight"
               style={({ pressed }) => [styles.actionRow, pressed && styles.actionPressed]}>
               <Text style={[styles.actionLabel, { color: theme.text }]}>Copy</Text>
             </Pressable>
             <Pressable
+              onPress={shareHighlight}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.actionRow, pressed && styles.actionPressed]}>
+              <Text style={[styles.actionLabel, { color: theme.text }]}>Share</Text>
+            </Pressable>
+            <Pressable
               onPress={remove}
               accessibilityRole="button"
-              accessibilityLabel="Remove highlight"
               style={({ pressed }) => [styles.actionRow, pressed && styles.actionPressed]}>
               <Text style={[styles.actionLabel, styles.destructive]}>Remove highlight</Text>
             </Pressable>
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel="Close"
               style={({ pressed }) => [styles.actionRow, pressed && styles.actionPressed]}>
               <Text style={[styles.actionLabel, { color: theme.textSecondary }]}>Close</Text>
             </Pressable>
@@ -89,25 +196,64 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   sheet: {
-    marginHorizontal: ReadingLayout.insetX,
+    marginHorizontal: 20,
     marginBottom: 12,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     paddingTop: 18,
     paddingHorizontal: 18,
     gap: 8,
+    maxHeight: '80%',
   },
   quote: {
-    fontFamily: ReadingTypography.serif,
     fontSize: 15,
     lineHeight: 22,
-    marginBottom: 6,
+    marginBottom: 4,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  colorChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  noteInput: {
+    minHeight: 64,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlignVertical: 'top',
   },
   actions: {
     gap: 2,
+    marginTop: 4,
   },
   actionRow: {
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   actionPressed: {
     opacity: 0.65,

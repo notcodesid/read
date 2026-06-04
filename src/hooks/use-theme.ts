@@ -1,9 +1,5 @@
-import { ReadingColors } from '@/constants/reading';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useReadingPreferences } from '@/contexts/reading-preferences-context';
 
 export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
-
-  return ReadingColors[theme];
+  return useReadingPreferences().theme;
 }

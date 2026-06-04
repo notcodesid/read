@@ -7,6 +7,7 @@ const STORAGE_KEY = '@read/reading-progress/v1';
 const EMPTY_STORE: ReadingProgressStore = {
   articles: {},
   themes: {},
+  scrollPositions: {},
 };
 
 export async function loadReadingProgress(): Promise<ReadingProgressStore> {
@@ -21,6 +22,10 @@ export async function loadReadingProgress(): Promise<ReadingProgressStore> {
       articles:
         parsed.articles && typeof parsed.articles === 'object' ? parsed.articles : {},
       themes: parsed.themes && typeof parsed.themes === 'object' ? parsed.themes : {},
+      scrollPositions:
+        parsed.scrollPositions && typeof parsed.scrollPositions === 'object'
+          ? parsed.scrollPositions
+          : {},
     };
   } catch {
     return { ...EMPTY_STORE };

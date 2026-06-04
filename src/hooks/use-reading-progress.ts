@@ -12,6 +12,7 @@ import type { ReadingProgressStore } from '@/types/reading-progress';
 const EMPTY_STORE: ReadingProgressStore = {
   articles: {},
   themes: {},
+  scrollPositions: {},
 };
 
 export function useReadingProgress() {

@@ -20,14 +20,19 @@ export async function loadHighlights(articleId: string): Promise<Highlight[]> {
       return [];
     }
 
-    return parsed.filter(
-      (item) =>
-        typeof item?.id === 'string' &&
-        item.articleId === articleId &&
-        typeof item.quote === 'string' &&
-        item.start &&
-        item.end,
-    );
+    return parsed
+      .filter(
+        (item) =>
+          typeof item?.id === 'string' &&
+          item.articleId === articleId &&
+          typeof item.quote === 'string' &&
+          item.start &&
+          item.end,
+      )
+      .map((item) => ({
+        ...item,
+        color: item.color === 'green' ? 'green' : 'yellow',
+      }));
   } catch {
     return [];
   }
@@ -50,6 +55,19 @@ export async function removeHighlight(
 ): Promise<Highlight[]> {
   const existing = await loadHighlights(articleId);
   const next = existing.filter((item) => item.id !== highlightId);
+  await saveHighlights(articleId, next);
+  return next;
+}
+
+export async function updateHighlight(
+  articleId: string,
+  highlightId: string,
+  patch: Partial<Pick<Highlight, 'color' | 'label' | 'note'>>,
+): Promise<Highlight[]> {
+  const existing = await loadHighlights(articleId);
+  const next = existing.map((item) =>
+    item.id === highlightId ? { ...item, ...patch } : item,
+  );
   await saveHighlights(articleId, next);
   return next;
 }

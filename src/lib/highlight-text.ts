@@ -1,3 +1,4 @@
+import type { HighlightColorId, HighlightLabel } from '@/types/reading-preferences';
 import type { Highlight, WordPointer } from '@/types/highlight';
 
 export type WordToken = {
@@ -167,6 +168,7 @@ export function buildHighlightFromSelection(
   paragraphs: string[],
   anchor: WordPointer,
   focus: WordPointer,
+  defaults?: { color?: HighlightColorId; label?: HighlightLabel | null },
 ): Highlight | null {
   const { start: lo, end: hi } = normalizePointerRange(anchor, focus);
   const startParagraph = paragraphs[lo.paragraphIndex];
@@ -209,15 +211,21 @@ export function buildHighlightFromSelection(
     return null;
   }
 
-  return {
+  const highlight: Highlight = {
     id: createHighlightId(),
     articleId,
     start: { paragraphIndex: lo.paragraphIndex, offset: startToken.start },
     end: { paragraphIndex: hi.paragraphIndex, offset: endToken.end },
     quote,
-    color: 'default',
+    color: defaults?.color ?? 'yellow',
     createdAt: new Date().toISOString(),
   };
+
+  if (defaults?.label) {
+    highlight.label = defaults.label;
+  }
+
+  return highlight;
 }
 
 export function highlightIntervalInParagraph(

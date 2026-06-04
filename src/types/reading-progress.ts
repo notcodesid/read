@@ -6,9 +6,15 @@ export type CompletedTheme = {
   completedAt: string;
 };
 
+export type ScrollPosition = {
+  offsetY: number;
+  updatedAt: string;
+};
+
 export type ReadingProgressStore = {
   articles: Record<string, CompletedArticle>;
   themes: Record<string, CompletedTheme>;
+  scrollPositions: Record<string, ScrollPosition>;
 };
 
 export type ThemeProgress = {

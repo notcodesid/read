@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
 import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
+import { ReadingSettingsSheet } from '@/components/reader/reading-settings-sheet';
 import { ReadingLayout } from '@/constants/reading';
 import { useAuthorShelf } from '@/hooks/use-author-shelf';
 import { useTheme } from '@/hooks/use-theme';
@@ -19,6 +21,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { sections, unassignedAuthors, refreshing, error, refresh } = useAuthorShelf();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const hasAuthors =
     sections.some((section) => section.authors.length > 0) || unassignedAuthors.length > 0;
@@ -27,9 +30,13 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <View style={styles.header}>
+      <Pressable
+        style={styles.header}
+        onLongPress={() => setSettingsOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Home. Long press for reading settings">
         <AppLogo size={56} />
-      </View>
+      </Pressable>
 
       {showLoadingScreen ? (
         <View style={styles.loaderCenter}>
@@ -80,6 +87,8 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       )}
+
+      <ReadingSettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </SafeAreaView>
   );
 }

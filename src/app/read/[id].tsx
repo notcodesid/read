@@ -9,6 +9,7 @@ import {
   type NativeSyntheticEvent,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -16,35 +17,97 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { HighlightableArticleBody } from '@/components/reader/highlightable-article-body';
+import { ReadingSettingsSheet } from '@/components/reader/reading-settings-sheet';
 import { getBundledHeroImageSource } from '@/constants/article-images';
-import { ReadingLayout, ReadingTypography } from '@/constants/reading';
+import { useReadingPreferences } from '@/contexts/reading-preferences-context';
 import { useArticle } from '@/hooks/use-articles';
 import { useHighlights } from '@/hooks/use-highlights';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTheme } from '@/hooks/use-theme';
 import { getBundledSummaries } from '@/lib/articles';
+import { highlightsToMarkdown } from '@/lib/export-highlights';
+import { countArticleWords } from '@/lib/resolve-reading-styles';
+import { recordReadingSession, estimateReadingMinutes } from '@/lib/reading-wpm';
+import { loadScrollPosition, saveScrollPosition } from '@/lib/scroll-position';
 
 const SCROLL_END_THRESHOLD = 48;
+const SCROLL_SAVE_MS = 400;
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
+  const { typography, layout, preferences, stats, refreshStats, getHighlightStyle } =
+    useReadingPreferences();
   const articleId = typeof id === 'string' ? id : undefined;
   const { article, loading, error, retry } = useArticle(articleId);
-  const { highlights, addHighlight, removeHighlight } = useHighlights(articleId);
+  const { highlights, addHighlight, removeHighlight, updateHighlight } = useHighlights(articleId);
   const { isArticleCompleted, markComplete } = useReadingProgress();
   const [selecting, setSelecting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeCompleteNotice, setThemeCompleteNotice] = useState<{
     articleId: string;
     themeName: string;
   } | null>(null);
   const [scrollHeight, setScrollHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
+  const [scrollOffsetY, setScrollOffsetY] = useState(0);
   const markedCompleteRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollRestoredRef = useRef(false);
+  const openedAtRef = useRef(Date.now());
+  const saveScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     markedCompleteRef.current = false;
+    scrollRestoredRef.current = false;
+    openedAtRef.current = Date.now();
+    setScrollOffsetY(0);
+
+    if (!articleId) {
+      return;
+    }
+
+    loadScrollPosition(articleId).then((offsetY) => {
+      if (offsetY > 0) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: offsetY, animated: false });
+          setScrollOffsetY(offsetY);
+        });
+      }
+      scrollRestoredRef.current = true;
+    });
   }, [articleId]);
+
+  useEffect(() => {
+    return () => {
+      if (saveScrollTimerRef.current) {
+        clearTimeout(saveScrollTimerRef.current);
+      }
+    };
+  }, []);
+
+  const recordSession = useCallback(
+    async (progressRatio: number) => {
+      if (!article) {
+        return;
+      }
+      await recordReadingSession(article.paragraphs, Date.now() - openedAtRef.current, progressRatio);
+      await refreshStats();
+    },
+    [article, refreshStats],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (!article) {
+        return;
+      }
+
+      const maxScroll = Math.max(1, contentHeight - scrollHeight);
+      const ratio = scrollHeight > 0 ? scrollOffsetY / maxScroll : 0;
+      void recordSession(ratio);
+    };
+  }, [article?.id]);
 
   const handleSelectingChange = useCallback((value: boolean) => {
     setSelecting(value);
@@ -78,10 +141,41 @@ export default function ReaderScreen() {
       articleIdsInTheme(),
     );
 
+    const maxScroll = Math.max(1, contentHeight - scrollHeight);
+    const ratio = scrollHeight > 0 ? Math.min(1, scrollOffsetY / maxScroll) : 1;
+    await recordSession(Math.max(ratio, 1));
+
     if (result.themeJustCompleted && result.themeName) {
       setThemeCompleteNotice({ articleId: article.id, themeName: result.themeName });
     }
-  }, [article, articleIdsInTheme, isArticleCompleted, markComplete, selecting]);
+  }, [
+    article,
+    articleIdsInTheme,
+    contentHeight,
+    isArticleCompleted,
+    markComplete,
+    recordSession,
+    scrollHeight,
+    scrollOffsetY,
+    selecting,
+  ]);
+
+  const scheduleScrollSave = useCallback(
+    (offsetY: number) => {
+      if (!articleId) {
+        return;
+      }
+
+      if (saveScrollTimerRef.current) {
+        clearTimeout(saveScrollTimerRef.current);
+      }
+
+      saveScrollTimerRef.current = setTimeout(() => {
+        void saveScrollPosition(articleId, offsetY);
+      }, SCROLL_SAVE_MS);
+    },
+    [articleId],
+  );
 
   const evaluateScrollEnd = useCallback(
     (offsetY: number) => {
@@ -90,8 +184,7 @@ export default function ReaderScreen() {
       }
 
       const fitsWithoutScrolling = contentHeight <= scrollHeight + SCROLL_END_THRESHOLD;
-      const scrolledToEnd =
-        offsetY + scrollHeight >= contentHeight - SCROLL_END_THRESHOLD;
+      const scrolledToEnd = offsetY + scrollHeight >= contentHeight - SCROLL_END_THRESHOLD;
 
       if (fitsWithoutScrolling || scrolledToEnd) {
         void tryMarkFinished();
@@ -102,9 +195,12 @@ export default function ReaderScreen() {
 
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      evaluateScrollEnd(event.nativeEvent.contentOffset.y);
+      const offsetY = event.nativeEvent.contentOffset.y;
+      setScrollOffsetY(offsetY);
+      scheduleScrollSave(offsetY);
+      evaluateScrollEnd(offsetY);
     },
-    [evaluateScrollEnd],
+    [evaluateScrollEnd, scheduleScrollSave],
   );
 
   const handleScrollLayout = useCallback(
@@ -112,21 +208,45 @@ export default function ReaderScreen() {
       const height = event.nativeEvent.layout.height;
       setScrollHeight(height);
       if (height > 0 && contentHeight > 0) {
-        evaluateScrollEnd(0);
+        evaluateScrollEnd(scrollOffsetY);
       }
     },
-    [contentHeight, evaluateScrollEnd],
+    [contentHeight, evaluateScrollEnd, scrollOffsetY],
   );
 
   const handleContentSizeChange = useCallback(
     (_width: number, height: number) => {
       setContentHeight(height);
       if (scrollHeight > 0 && height > 0) {
-        evaluateScrollEnd(0);
+        evaluateScrollEnd(scrollOffsetY);
       }
     },
-    [scrollHeight, evaluateScrollEnd],
+    [evaluateScrollEnd, scrollHeight, scrollOffsetY],
   );
+
+  const exportHighlights = useCallback(async () => {
+    if (!article || highlights.length === 0) {
+      return;
+    }
+
+    const markdown = highlightsToMarkdown(
+      article.title,
+      highlights,
+      article.author ?? article.source,
+    );
+    await Share.share({
+      message: markdown,
+      title: `Highlights — ${article.title}`,
+    });
+    setSettingsOpen(false);
+  }, [article, highlights]);
+
+  const contentStyle = {
+    paddingHorizontal: layout.insetX,
+    paddingTop: layout.insetTop,
+    paddingBottom: layout.insetBottom,
+    maxWidth: layout.maxWidth,
+  };
 
   if (loading && !article) {
     return (
@@ -161,14 +281,33 @@ export default function ReaderScreen() {
   const bundledHero = getBundledHeroImageSource(article.id);
   const heroSource = bundledHero ?? (article.heroImageUrl ? { uri: article.heroImageUrl } : null);
   const completed = isArticleCompleted(article.id);
+  const wordCount = countArticleWords(article.paragraphs);
+  const readMinutes = estimateReadingMinutes(wordCount, stats.wpmSamples);
+  const readTimeLabel =
+    stats.wpmSamples.length > 0
+      ? `${readMinutes} min read`
+      : `~${readMinutes} min read`;
+
+  const getHighlightFill = (color: 'yellow' | 'green') => getHighlightStyle(color).fill;
+  const getHighlightSelectingFill = (color: 'yellow' | 'green') =>
+    getHighlightStyle(color).fillSelecting;
 
   return (
     <>
       <Stack.Screen options={{ animation: 'fade', gestureEnabled: true }} />
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
+        <Pressable
+          onPress={() => setSettingsOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Reading settings"
+          style={[styles.settingsButton, { borderColor: theme.border }]}>
+          <Text style={[styles.settingsButtonText, { color: theme.textSecondary }]}>Aa</Text>
+        </Pressable>
+
         <ScrollView
+          ref={scrollRef}
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, contentStyle]}
           scrollEnabled={!selecting}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -178,22 +317,42 @@ export default function ReaderScreen() {
           scrollEventThrottle={80}>
           {article.category ? (
             <View style={styles.categoryRow}>
-              <Text style={[styles.category, { color: theme.textSecondary }]}>
+              <Text
+                style={[
+                  styles.category,
+                  typography.meta,
+                  { color: theme.textSecondary, fontFamily: typography.bodyFontFamily },
+                ]}>
                 {article.category}
               </Text>
               {completed ? (
-                <Text style={[styles.completedBadge, { color: theme.textSecondary }]}>
+                <Text
+                  style={[
+                    styles.completedBadge,
+                    typography.meta,
+                    { color: theme.textSecondary },
+                  ]}>
                   Read
                 </Text>
               ) : null}
             </View>
           ) : null}
-          <Text style={[styles.title, { color: theme.text }]}>{article.title}</Text>
-          {(article.source || article.author) && (
-            <Text style={[styles.byline, { color: theme.textSecondary }]}>
-              {[article.source, article.author].filter(Boolean).join(' · ')}
-            </Text>
-          )}
+          <Text
+            style={[
+              styles.title,
+              {
+                color: theme.text,
+                fontFamily: typography.bodyFontFamily,
+                fontSize: typography.bodySize + 6,
+                lineHeight: typography.bodyLineHeight + 2,
+              },
+            ]}>
+            {article.title}
+          </Text>
+          <Text style={[styles.byline, typography.meta, { color: theme.textSecondary }]}>
+            {[article.source, article.author].filter(Boolean).join(' · ')}
+            {wordCount > 0 ? ` · ${readTimeLabel}` : ''}
+          </Text>
 
           {heroSource ? (
             <Image
@@ -212,12 +371,29 @@ export default function ReaderScreen() {
                 highlights={highlights}
                 textColor={theme.text}
                 metaColor={theme.textSecondary}
+                typography={typography}
+                highlightDefaults={{
+                  color: preferences.defaultHighlightColor,
+                  label: preferences.defaultHighlightLabel,
+                }}
+                getHighlightFill={getHighlightFill}
+                getHighlightSelectingFill={getHighlightSelectingFill}
                 onAddHighlight={addHighlight}
                 onRemoveHighlight={removeHighlight}
+                onUpdateHighlight={updateHighlight}
                 onSelectingChange={handleSelectingChange}
               />
             ) : (
-              <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
+              <Text
+                style={[
+                  styles.emptyBody,
+                  {
+                    color: theme.textSecondary,
+                    fontFamily: typography.bodyFontFamily,
+                    fontSize: typography.bodySize,
+                    lineHeight: typography.bodyLineHeight,
+                  },
+                ]}>
                 No content available for this article.
               </Text>
             )}
@@ -232,9 +408,7 @@ export default function ReaderScreen() {
                   borderColor: theme.border,
                 },
               ]}>
-              <Text style={[styles.themeCompleteTitle, { color: theme.text }]}>
-                Theme complete
-              </Text>
+              <Text style={[styles.themeCompleteTitle, { color: theme.text }]}>Theme complete</Text>
               <Text style={[styles.themeCompleteMeta, { color: theme.textSecondary }]}>
                 You finished every piece in {themeCompleteNotice.themeName}
               </Text>
@@ -247,7 +421,7 @@ export default function ReaderScreen() {
               accessibilityRole="link"
               accessibilityLabel="Open original article"
               style={({ pressed }) => [styles.sourceLink, pressed && styles.sourceLinkPressed]}>
-              <Text style={[styles.sourceLinkText, { color: theme.textSecondary }]}>
+              <Text style={[styles.sourceLinkText, typography.meta, { color: theme.textSecondary }]}>
                 View original
               </Text>
             </Pressable>
@@ -259,12 +433,19 @@ export default function ReaderScreen() {
               accessibilityRole="button"
               accessibilityLabel="Mark as finished reading"
               style={({ pressed }) => [styles.markFinished, pressed && styles.sourceLinkPressed]}>
-              <Text style={[styles.markFinishedText, { color: theme.textSecondary }]}>
+              <Text style={[styles.markFinishedText, typography.meta, { color: theme.textSecondary }]}>
                 Mark as finished
               </Text>
             </Pressable>
           ) : null}
         </ScrollView>
+
+        <ReadingSettingsSheet
+          visible={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          onExportHighlights={exportHighlights}
+          highlightCount={highlights.length}
+        />
       </SafeAreaView>
     </>
   );
@@ -279,10 +460,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
-    paddingHorizontal: ReadingLayout.insetX,
+    paddingHorizontal: 28,
   },
   missingText: {
-    ...ReadingTypography.meta,
+    fontSize: 12,
+    lineHeight: 16,
     textAlign: 'center',
   },
   retryButton: {
@@ -293,14 +475,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
+  settingsButton: {
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingsButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
   scroll: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: ReadingLayout.insetX,
-    paddingTop: ReadingLayout.insetTop,
-    paddingBottom: ReadingLayout.insetBottom,
-    maxWidth: ReadingLayout.maxWidth,
     width: '100%',
     alignSelf: 'center',
   },
@@ -312,13 +506,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   category: {
-    ...ReadingTypography.meta,
     flex: 1,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   completedBadge: {
-    ...ReadingTypography.meta,
     fontWeight: '600',
     letterSpacing: 0.3,
   },
@@ -335,7 +527,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   themeCompleteMeta: {
-    ...ReadingTypography.meta,
+    fontSize: 12,
     lineHeight: 18,
   },
   markFinished: {
@@ -344,19 +536,14 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   markFinishedText: {
-    ...ReadingTypography.meta,
     textDecorationLine: 'underline',
   },
   title: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: 22,
-    lineHeight: 28,
     fontWeight: '600',
     letterSpacing: -0.2,
     marginBottom: 6,
   },
   byline: {
-    ...ReadingTypography.meta,
     marginBottom: 22,
   },
   heroImage: {
@@ -369,9 +556,6 @@ const styles = StyleSheet.create({
     gap: 0,
   },
   emptyBody: {
-    fontFamily: ReadingTypography.serif,
-    fontSize: ReadingTypography.bodySize,
-    lineHeight: ReadingTypography.bodyLineHeight,
     fontStyle: 'italic',
   },
   sourceLink: {
@@ -382,7 +566,6 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   sourceLinkText: {
-    ...ReadingTypography.meta,
     textDecorationLine: 'underline',
   },
 });

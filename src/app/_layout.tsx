@@ -3,44 +3,27 @@ import '@/global.css';
 import { Stack } from 'expo-router';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { View } from 'react-native';
-import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LaunchSplash } from '@/components/launch-splash';
-import { ReadingColors } from '@/constants/reading';
+import { ReadingPreferencesProvider, useReadingPreferences } from '@/contexts/reading-preferences-context';
 
-const light = ReadingColors.light;
-const dark = ReadingColors.dark;
+function NavigationRoot() {
+  const { theme, isDark } = useReadingPreferences();
 
-const LightTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: light.background,
-    card: light.backgroundElement,
-    text: light.text,
-    border: light.border,
-  },
-};
-
-const DarkReadingTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: dark.background,
-    card: dark.backgroundElement,
-    text: dark.text,
-    border: dark.border,
-  },
-};
-
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? dark : light;
+  const navTheme = {
+    ...(isDark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
+      background: theme.background,
+      card: theme.backgroundElement,
+      text: theme.text,
+      border: theme.border,
+    },
+  };
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.background }}>
-    <ThemeProvider value={colorScheme === 'dark' ? DarkReadingTheme : LightTheme}>
+    <ThemeProvider value={navTheme}>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
           <Stack.Screen name="index" />
@@ -56,6 +39,15 @@ export default function RootLayout() {
         <LaunchSplash />
       </View>
     </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ReadingPreferencesProvider>
+        <NavigationRoot />
+      </ReadingPreferencesProvider>
     </GestureHandlerRootView>
   );
 }
