@@ -48,11 +48,7 @@ export const supabase = createClient(
   supabaseUrl ?? 'https://placeholder.supabase.co',
   supabasePublishableKey ?? 'placeholder',
   {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+    auth: { persistSession: false, autoRefreshToken: false },
     global: {
       fetch: fetchWithTimeout,
     },

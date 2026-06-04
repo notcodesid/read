@@ -51,7 +51,13 @@
           }
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "reading-reminders"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -18,3 +18,16 @@ export async function saveScrollPosition(articleId: string, offsetY: number): Pr
     },
   });
 }
+
+export async function clearScrollPosition(articleId: string): Promise<void> {
+  const store = await loadReadingProgress();
+  if (!store.scrollPositions[articleId]) {
+    return;
+  }
+
+  const { [articleId]: _removed, ...scrollPositions } = store.scrollPositions;
+  await saveReadingProgress({
+    ...store,
+    scrollPositions,
+  });
+}

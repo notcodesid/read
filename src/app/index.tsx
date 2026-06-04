@@ -12,18 +12,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppLogo } from '@/components/app-logo';
 import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
-import { ContinueReadingRow } from '@/components/home/continue-reading-row';
+import { DailyPickCard } from '@/components/home/daily-pick-card';
+import { HomePersonalSection } from '@/components/home/home-personal-section';
 import { ReadingSettingsSheet } from '@/components/reader/reading-settings-sheet';
 import { ReadingLayout } from '@/constants/reading';
 import { useAuthorShelf } from '@/hooks/use-author-shelf';
-import { useContinueReading } from '@/hooks/use-continue-reading';
+import { useHomePersonal } from '@/hooks/use-home-personal';
+import { useReadingReminders } from '@/hooks/use-reading-reminders';
+import { toggleArticleBookmark } from '@/lib/bookmarks';
 import { useTheme } from '@/hooks/use-theme';
 
 export default function HomeScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { sections, unassignedAuthors, refreshing, error, refresh } = useAuthorShelf();
-  const { items: continueReading } = useContinueReading();
+  const { continueReading, readLater, forYou, dailyPick, refresh: refreshPersonal } =
+    useHomePersonal();
+  const {
+    settings: reminderSettings,
+    permissionDenied,
+    toggleEnabled: toggleReminder,
+    changePreset: changeReminderPreset,
+    remindersAvailable,
+  } = useReadingReminders(dailyPick);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const hasAuthors =
@@ -63,13 +74,30 @@ export default function HomeScreen() {
           ) : null}
 
           <View style={styles.shelves}>
-            <ContinueReadingRow
-              items={continueReading}
+            {dailyPick ? (
+              <DailyPickCard
+                pick={dailyPick}
+                textColor={theme.text}
+                metaColor={theme.textSecondary}
+                borderColor={theme.border}
+                surfaceColor={theme.backgroundElement}
+                onPress={(articleId) => router.push(`/read/${articleId}`)}
+              />
+            ) : null}
+
+            <HomePersonalSection
+              dailyPickArticleId={dailyPick?.articleId}
+              continueReading={continueReading}
+              readLater={readLater}
+              forYou={forYou}
               textColor={theme.text}
               metaColor={theme.textSecondary}
               borderColor={theme.border}
               surfaceColor={theme.backgroundElement}
               onArticlePress={(articleId) => router.push(`/read/${articleId}`)}
+              onRemoveFromReadLater={(articleId) => {
+                void toggleArticleBookmark(articleId).then(() => refreshPersonal());
+              }}
             />
 
             {sections.map((section) => (
@@ -100,7 +128,15 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
-      <ReadingSettingsSheet visible={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ReadingSettingsSheet
+        visible={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        reminderSettings={reminderSettings}
+        remindersAvailable={remindersAvailable}
+        reminderPermissionDenied={permissionDenied}
+        onToggleReminder={() => void toggleReminder()}
+        onReminderPresetChange={(preset) => void changeReminderPreset(preset)}
+      />
     </SafeAreaView>
   );
 }
@@ -119,8 +155,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: ReadingLayout.insetX,
     paddingTop: 8,
-    paddingBottom: 24,
-    gap: 20,
+    paddingBottom: 16,
   },
   loaderCenter: {
     flex: 1,

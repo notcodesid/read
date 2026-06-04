@@ -3,6 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HIGHLIGHT_LABELS } from '@/constants/reading-palettes';
 import { useReadingPreferences } from '@/contexts/reading-preferences-context';
+import { READING_REMINDER_PRESETS } from '@/types/daily-reading';
+import type { ReadingReminderPreset, ReadingReminderSettings } from '@/types/daily-reading';
 import type {
   HighlightColorId,
   ReadingAppearance,
@@ -18,6 +20,11 @@ type ReadingSettingsSheetProps = {
   onClose: () => void;
   onExportHighlights?: () => void;
   highlightCount?: number;
+  reminderSettings?: ReadingReminderSettings;
+  remindersAvailable?: boolean;
+  reminderPermissionDenied?: boolean;
+  onToggleReminder?: () => void;
+  onReminderPresetChange?: (preset: ReadingReminderPreset) => void;
 };
 
 type Option<T extends string> = { value: T; label: string };
@@ -73,6 +80,11 @@ export function ReadingSettingsSheet({
   onClose,
   onExportHighlights,
   highlightCount = 0,
+  reminderSettings,
+  remindersAvailable = false,
+  reminderPermissionDenied = false,
+  onToggleReminder,
+  onReminderPresetChange,
 }: ReadingSettingsSheetProps) {
   const { preferences, setPreference, theme } = useReadingPreferences();
   const insets = useSafeAreaInsets();
@@ -253,6 +265,74 @@ export function ReadingSettingsSheet({
               </View>
             </View>
 
+            {remindersAvailable && reminderSettings && onToggleReminder ? (
+              <View style={[styles.reminderBlock, { borderColor: theme.border }]}>
+                <View style={styles.reminderHeader}>
+                  <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+                    Daily reminder
+                  </Text>
+                  <Pressable
+                    onPress={onToggleReminder}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: reminderSettings.enabled }}
+                    style={[
+                      styles.reminderToggle,
+                      {
+                        borderColor: theme.border,
+                        backgroundColor: reminderSettings.enabled
+                          ? theme.backgroundElement
+                          : 'transparent',
+                      },
+                    ]}>
+                    <Text style={[styles.chipText, { color: theme.text }]}>
+                      {reminderSettings.enabled ? 'On' : 'Off'}
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={[styles.reminderMeta, { color: theme.textSecondary }]}>
+                  Local notification with today&apos;s pick
+                </Text>
+                {reminderPermissionDenied ? (
+                  <Text style={[styles.reminderWarning, { color: theme.textSecondary }]}>
+                    Allow notifications in Settings to use reminders.
+                  </Text>
+                ) : null}
+                {reminderSettings.enabled && onReminderPresetChange ? (
+                  <View style={styles.chipRow}>
+                    {(Object.keys(READING_REMINDER_PRESETS) as ReadingReminderPreset[]).map(
+                      (preset) => {
+                        const selected = reminderSettings.preset === preset;
+                        return (
+                          <Pressable
+                            key={preset}
+                            onPress={() => onReminderPresetChange(preset)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            style={[
+                              styles.chip,
+                              {
+                                borderColor: theme.border,
+                                backgroundColor: selected
+                                  ? theme.backgroundElement
+                                  : 'transparent',
+                              },
+                            ]}>
+                            <Text
+                              style={[
+                                styles.chipText,
+                                { color: selected ? theme.text : theme.textSecondary },
+                              ]}>
+                              {READING_REMINDER_PRESETS[preset].label}
+                            </Text>
+                          </Pressable>
+                        );
+                      },
+                    )}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             {onExportHighlights ? (
               <Pressable
                 onPress={onExportHighlights}
@@ -351,5 +431,31 @@ const styles = StyleSheet.create({
   },
   exportMeta: {
     fontSize: 12,
+  },
+  reminderBlock: {
+    marginTop: 4,
+    marginBottom: 12,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
+  reminderHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reminderToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  reminderMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  reminderWarning: {
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });

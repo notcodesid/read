@@ -1,4 +1,5 @@
 import { buildThemeKey } from '@/lib/theme-key';
+import { clearScrollPosition } from '@/lib/scroll-position';
 import { loadReadingProgress, saveReadingProgress } from '@/lib/reading-progress-storage';
 import type { ReadingProgressStore, ThemeProgress } from '@/types/reading-progress';
 
@@ -105,6 +106,7 @@ export async function markArticleCompleted(
   }
 
   await saveReadingProgress(store);
+  await clearScrollPosition(articleId);
 
   return {
     alreadyCompleted: false,

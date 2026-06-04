@@ -46,6 +46,7 @@ type ReadingPreferencesContextValue = {
     value: ReadingPreferences[K],
   ) => Promise<void>;
   refreshStats: () => Promise<void>;
+  reloadFromStorage: () => Promise<void>;
   getHighlightStyle: (colorId: 'yellow' | 'green') => {
     fill: string;
     fillSelecting: string;
@@ -81,6 +82,15 @@ export function ReadingPreferencesProvider({ children }: { children: ReactNode }
 
   const refreshStats = useCallback(async () => {
     const nextStats = await loadReadingStats();
+    setStats(nextStats);
+  }, []);
+
+  const reloadFromStorage = useCallback(async () => {
+    const [prefs, nextStats] = await Promise.all([
+      loadReadingPreferences(),
+      loadReadingStats(),
+    ]);
+    setPreferences(prefs);
     setStats(nextStats);
   }, []);
 
@@ -127,9 +137,19 @@ export function ReadingPreferencesProvider({ children }: { children: ReactNode }
       wpm: resolved.wpm,
       setPreference,
       refreshStats,
+      reloadFromStorage,
       getHighlightStyle,
     }),
-    [ready, preferences, stats, resolved, setPreference, refreshStats, getHighlightStyle],
+    [
+      ready,
+      preferences,
+      stats,
+      resolved,
+      setPreference,
+      refreshStats,
+      reloadFromStorage,
+      getHighlightStyle,
+    ],
   );
 
   return (

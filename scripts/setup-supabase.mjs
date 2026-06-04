@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
@@ -10,6 +10,11 @@ if (!dbUrl) {
   console.error('Missing SUPABASE_DB_URL in .env');
   process.exit(1);
 }
+
+const migrationsDir = join(__dirname, '../supabase/migrations');
+const migrationFiles = readdirSync(migrationsDir)
+  .filter((name) => name.endsWith('.sql'))
+  .sort();
 
 const seed = {
   id: 'channel-capacity',
@@ -25,16 +30,16 @@ const seed = {
   ],
 };
 
-const migrationSql = readFileSync(
-  join(__dirname, '../supabase/migrations/001_articles.sql'),
-  'utf8',
-);
-
 const client = new pg.Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
 
 try {
   await client.connect();
-  await client.query(migrationSql);
+
+  for (const file of migrationFiles) {
+    const sql = readFileSync(join(migrationsDir, file), 'utf8');
+    await client.query(sql);
+    console.log(`Applied ${file}`);
+  }
 
   await client.query(
     `insert into public.articles (id, title, source, author, paragraphs, added_at)
@@ -49,9 +54,9 @@ try {
   );
 
   const { rows } = await client.query(
-    'select id, title from public.articles order by added_at desc',
+    'select id, title from public.articles order by added_at desc limit 5',
   );
-  console.log(`Setup complete. ${rows.length} article(s) in database:`);
+  console.log(`Setup complete. Sample articles (${rows.length} shown):`);
   for (const row of rows) {
     console.log(`  - ${row.id}: ${row.title}`);
   }

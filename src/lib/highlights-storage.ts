@@ -1,8 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
 import type { Highlight } from '@/types/highlight';
 
 const STORAGE_PREFIX = '@read/highlights/v1/';
+
+export function highlightsStoragePrefix(): string {
+  return STORAGE_PREFIX;
+}
 
 function storageKey(articleId: string): string {
   return `${STORAGE_PREFIX}${articleId}`;
@@ -40,6 +45,22 @@ export async function loadHighlights(articleId: string): Promise<Highlight[]> {
 
 export async function saveHighlights(articleId: string, highlights: Highlight[]): Promise<void> {
   await AsyncStorage.setItem(storageKey(articleId), JSON.stringify(highlights));
+}
+
+export async function loadAllHighlights(): Promise<Record<string, Highlight[]>> {
+  const keys = await AsyncStorage.getAllKeys();
+  const prefix = STORAGE_PREFIX;
+  const result: Record<string, Highlight[]> = {};
+
+  for (const key of keys) {
+    if (!key.startsWith(prefix)) {
+      continue;
+    }
+    const articleId = key.slice(prefix.length);
+    result[articleId] = await loadHighlights(articleId);
+  }
+
+  return result;
 }
 
 export async function addHighlight(highlight: Highlight): Promise<Highlight[]> {

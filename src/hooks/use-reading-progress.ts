@@ -13,6 +13,7 @@ const EMPTY_STORE: ReadingProgressStore = {
   articles: {},
   themes: {},
   scrollPositions: {},
+  recentOpens: {},
 };
 
 export function useReadingProgress() {

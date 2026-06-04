@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import * as WebBrowser from 'expo-web-browser';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,11 +16,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BookmarkButton } from '@/components/reader/bookmark-button';
 import { HighlightableArticleBody } from '@/components/reader/highlightable-article-body';
 import { ReadingSettingsSheet } from '@/components/reader/reading-settings-sheet';
 import { getBundledHeroImageSource } from '@/constants/article-images';
 import { useReadingPreferences } from '@/contexts/reading-preferences-context';
 import { useArticle } from '@/hooks/use-articles';
+import { useBookmarks } from '@/hooks/use-bookmarks';
 import { useHighlights } from '@/hooks/use-highlights';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTheme } from '@/hooks/use-theme';
@@ -44,6 +46,7 @@ export default function ReaderScreen() {
   const { article, loading, error, retry } = useArticle(articleId);
   const { highlights, addHighlight, removeHighlight, updateHighlight } = useHighlights(articleId);
   const { isArticleCompleted, markComplete } = useReadingProgress();
+  const { bookmarked, toggleBookmark } = useBookmarks(articleId);
   const [selecting, setSelecting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeCompleteNotice, setThemeCompleteNotice] = useState<{
@@ -56,14 +59,29 @@ export default function ReaderScreen() {
   const markedCompleteRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const scrollRestoredRef = useRef(false);
+  const scrollOffsetYRef = useRef(0);
   const openedAtRef = useRef(Date.now());
   const saveScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushScrollPosition = useCallback(() => {
+    if (!articleId) {
+      return;
+    }
+
+    if (saveScrollTimerRef.current) {
+      clearTimeout(saveScrollTimerRef.current);
+      saveScrollTimerRef.current = null;
+    }
+
+    void saveScrollPosition(articleId, scrollOffsetYRef.current);
+  }, [articleId]);
 
   useEffect(() => {
     markedCompleteRef.current = false;
     scrollRestoredRef.current = false;
     openedAtRef.current = Date.now();
     setScrollOffsetY(0);
+    scrollOffsetYRef.current = 0;
 
     if (!articleId) {
       return;
@@ -76,19 +94,26 @@ export default function ReaderScreen() {
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: offsetY, animated: false });
           setScrollOffsetY(offsetY);
+          scrollOffsetYRef.current = offsetY;
         });
       }
       scrollRestoredRef.current = true;
     });
   }, [articleId]);
 
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        flushScrollPosition();
+      };
+    }, [flushScrollPosition]),
+  );
+
   useEffect(() => {
     return () => {
-      if (saveScrollTimerRef.current) {
-        clearTimeout(saveScrollTimerRef.current);
-      }
+      flushScrollPosition();
     };
-  }, []);
+  }, [flushScrollPosition]);
 
   const recordSession = useCallback(
     async (progressRatio: number) => {
@@ -201,6 +226,7 @@ export default function ReaderScreen() {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
       setScrollOffsetY(offsetY);
+      scrollOffsetYRef.current = offsetY;
       scheduleScrollSave(offsetY);
       evaluateScrollEnd(offsetY);
     },
@@ -310,13 +336,21 @@ export default function ReaderScreen() {
     <>
       <Stack.Screen options={{ animation: 'fade', gestureEnabled: true }} />
       <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-        <Pressable
-          onPress={() => setSettingsOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Reading settings"
-          style={[styles.settingsButton, { borderColor: theme.border }]}>
-          <Text style={[styles.settingsButtonText, { color: theme.textSecondary }]}>Aa</Text>
-        </Pressable>
+        <View style={styles.topBar} pointerEvents="box-none">
+          <BookmarkButton
+            bookmarked={bookmarked}
+            borderColor={theme.border}
+            textColor={theme.textSecondary}
+            onPress={() => void toggleBookmark()}
+          />
+          <Pressable
+            onPress={() => setSettingsOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Reading settings"
+            style={[styles.settingsButton, { borderColor: theme.border }]}>
+            <Text style={[styles.settingsButtonText, { color: theme.textSecondary }]}>Aa</Text>
+          </Pressable>
+        </View>
 
         <ScrollView
           ref={scrollRef}
@@ -489,11 +523,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  settingsButton: {
+  topBar: {
     position: 'absolute',
     top: 56,
+    left: 20,
     right: 20,
     zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  settingsButton: {
     width: 36,
     height: 36,
     borderRadius: 18,

@@ -11,10 +11,15 @@ export type ScrollPosition = {
   updatedAt: string;
 };
 
+export type RecentOpen = {
+  openedAt: string;
+};
+
 export type ReadingProgressStore = {
   articles: Record<string, CompletedArticle>;
   themes: Record<string, CompletedTheme>;
   scrollPositions: Record<string, ScrollPosition>;
+  recentOpens: Record<string, RecentOpen>;
 };
 
 export type ThemeProgress = {

@@ -7,9 +7,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { LaunchSplash } from '@/components/launch-splash';
 import { ReadingPreferencesProvider, useReadingPreferences } from '@/contexts/reading-preferences-context';
+import { useNotificationObserver } from '@/hooks/use-notification-observer';
+import { configureReadingNotifications } from '@/lib/notifications-setup';
+
+configureReadingNotifications();
 
 function NavigationRoot() {
   const { theme, isDark } = useReadingPreferences();
+  useNotificationObserver();
 
   const navTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
