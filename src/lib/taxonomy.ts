@@ -1,7 +1,8 @@
 import bundledGroups from '@/data/author-groups.json';
 import bundledTopics from '@/data/blog-topics.json';
 import bundledSummaries from '@/data/article-summaries.json';
-import { fetchWithTimeout, getSupabaseConfig } from '@/lib/supabase';
+import { markSyncFailure, shouldSyncFromNetwork } from '@/lib/connectivity';
+import { getSupabaseConfig, supabase } from '@/lib/supabase';
 import type { AuthorGroup, BlogTopic } from '@/types/taxonomy';
 
 type AuthorGroupRow = {
@@ -114,72 +115,77 @@ export function getBundledArticlesForTopic(topicId: string) {
 }
 
 export async function fetchAuthorGroups(signal?: AbortSignal): Promise<AuthorGroup[]> {
+  if (!(await shouldSyncFromNetwork())) {
+    return getBundledAuthorGroups();
+  }
+
   const { url, key } = getSupabaseConfig();
   if (!url || !key) return getBundledAuthorGroups();
 
   try {
-    const endpoint =
-      `${url}/rest/v1/author_groups?select=id,name,description,sort_order&order=sort_order.asc`;
-    const res = await fetchWithTimeout(endpoint, {
-      signal,
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`,
-        Accept: 'application/json',
-      },
-    });
+    const query = supabase
+      .from('author_groups')
+      .select('id,name,description,sort_order')
+      .order('sort_order', { ascending: true });
 
-    if (!res.ok) throw new Error('author_groups fetch failed');
-    const rows = (await res.json()) as AuthorGroupRow[];
-    return rows.map(mapAuthorGroup);
+    if (signal) {
+      query.abortSignal(signal);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw error;
+    }
+
+    return (data as AuthorGroupRow[]).map(mapAuthorGroup);
   } catch {
+    markSyncFailure();
     return getBundledAuthorGroups();
   }
 }
 
 export async function fetchBlogTopics(signal?: AbortSignal): Promise<BlogTopic[]> {
+  if (!(await shouldSyncFromNetwork())) {
+    return getBundledBlogTopics();
+  }
+
   const { url, key } = getSupabaseConfig();
   if (!url || !key) return getBundledBlogTopics();
 
   try {
-    const [topicsRes, countsRes] = await Promise.all([
-      fetchWithTimeout(
-        `${url}/rest/v1/blog_topics?select=id,name,description,sort_order&order=sort_order.asc`,
-        {
-          signal,
-          headers: {
-            apikey: key,
-            Authorization: `Bearer ${key}`,
-            Accept: 'application/json',
-          },
-        },
-      ),
-      fetchWithTimeout(`${url}/rest/v1/articles?select=blog_topic_id`, {
-        signal,
-        headers: {
-          apikey: key,
-          Authorization: `Bearer ${key}`,
-          Accept: 'application/json',
-        },
-      }),
-    ]);
+    const topicsQuery = supabase
+      .from('blog_topics')
+      .select('id,name,description,sort_order')
+      .order('sort_order', { ascending: true });
+    const countsQuery = supabase.from('articles').select('blog_topic_id');
 
-    if (!topicsRes.ok || !countsRes.ok) throw new Error('blog_topics fetch failed');
+    if (signal) {
+      topicsQuery.abortSignal(signal);
+      countsQuery.abortSignal(signal);
+    }
 
-    const topicRows = (await topicsRes.json()) as BlogTopicRow[];
-    const countRows = (await countsRes.json()) as { blog_topic_id: string | null }[];
+    const [{ data: topicRows, error: topicsError }, { data: countRows, error: countsError }] =
+      await Promise.all([topicsQuery, countsQuery]);
+
+    if (topicsError) {
+      throw topicsError;
+    }
+    if (countsError) {
+      throw countsError;
+    }
+
     const counts = new Map<string, number>();
-
-    for (const row of countRows) {
+    for (const row of (countRows ?? []) as { blog_topic_id: string | null }[]) {
       if (!row.blog_topic_id) continue;
       counts.set(row.blog_topic_id, (counts.get(row.blog_topic_id) ?? 0) + 1);
     }
 
-    return topicRows
+    return (topicRows as BlogTopicRow[])
       .map((row) => mapBlogTopic(row, counts.get(row.id) ?? 0))
       .filter((topic) => topic.articleCount > 0)
       .sort((a, b) => a.sortOrder - b.sortOrder);
   } catch {
+    markSyncFailure();
     return getBundledBlogTopics();
   }
 }

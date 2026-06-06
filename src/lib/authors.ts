@@ -1,5 +1,6 @@
 import bundledAuthors from '@/data/authors.json';
-import { fetchWithTimeout, getSupabaseConfig } from '@/lib/supabase';
+import { markSyncFailure, shouldSyncFromNetwork } from '@/lib/connectivity';
+import { getSupabaseConfig, supabase } from '@/lib/supabase';
 import type { Author } from '@/types/author';
 
 import bundledSummaries from '@/data/article-summaries.json';
@@ -50,44 +51,49 @@ export function getBundledAuthors(): Author[] {
 }
 
 export async function fetchAuthors(signal?: AbortSignal): Promise<Author[]> {
+  if (!(await shouldSyncFromNetwork())) {
+    return getBundledAuthors();
+  }
+
   const { url, key } = getSupabaseConfig();
   if (!url || !key) {
     return getBundledAuthors();
   }
 
   try {
-    const authorsEndpoint =
-      `${url}/rest/v1/authors?select=id,name,tagline,site_url,sort_order,author_group_id&order=sort_order.asc`;
-    const countsEndpoint = `${url}/rest/v1/articles?select=author_id`;
+    const authorsQuery = supabase
+      .from('authors')
+      .select('id,name,tagline,site_url,sort_order,author_group_id')
+      .order('sort_order', { ascending: true });
 
-    const headers = {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      Accept: 'application/json',
-    };
+    const countsQuery = supabase.from('articles').select('author_id');
 
-    const [authorsRes, countsRes] = await Promise.all([
-      fetchWithTimeout(authorsEndpoint, { signal, headers }),
-      fetchWithTimeout(countsEndpoint, { signal, headers }),
-    ]);
-
-    if (!authorsRes.ok || !countsRes.ok) {
-      throw new Error('Authors fetch failed');
+    if (signal) {
+      authorsQuery.abortSignal(signal);
+      countsQuery.abortSignal(signal);
     }
 
-    const authorRows = (await authorsRes.json()) as AuthorRow[];
-    const countRows = (await countsRes.json()) as SummaryRow[];
-    const counts = new Map<string, number>();
+    const [{ data: authorRows, error: authorsError }, { data: countRows, error: countsError }] =
+      await Promise.all([authorsQuery, countsQuery]);
 
-    for (const row of countRows) {
+    if (authorsError) {
+      throw authorsError;
+    }
+    if (countsError) {
+      throw countsError;
+    }
+
+    const counts = new Map<string, number>();
+    for (const row of (countRows ?? []) as SummaryRow[]) {
       if (!row.author_id) continue;
       counts.set(row.author_id, (counts.get(row.author_id) ?? 0) + 1);
     }
 
-    return authorRows
+    return (authorRows as AuthorRow[])
       .map((row) => mapAuthor(row, counts.get(row.id) ?? 0))
       .sort((a, b) => a.sortOrder - b.sortOrder);
   } catch {
+    markSyncFailure();
     return getBundledAuthors();
   }
 }

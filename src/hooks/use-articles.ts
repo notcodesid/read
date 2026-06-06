@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { clearSyncBackoff, shouldSyncFromNetwork } from '@/lib/connectivity';
 import { getBundledAuthor } from '@/lib/authors';
 import {
   fetchArticleById,
@@ -7,7 +8,9 @@ import {
   getBundledArticle,
   getBundledSummaries,
   groupArticlesByCategory,
+  resolveArticleLocal,
 } from '@/lib/articles';
+import { getOfflineArticleSummaries } from '@/lib/offline-content';
 import { devWarn } from '@/lib/log';
 import type { Article, ArticleSection } from '@/types/article';
 
@@ -25,6 +28,7 @@ export function useAuthorArticles(authorId: string | undefined) {
 
     setRefreshing(true);
     setError(null);
+    clearSyncBackoff();
 
     try {
       const result = await fetchArticleSummaries(authorId);
@@ -48,7 +52,7 @@ export function useAuthorArticles(authorId: string | undefined) {
       return;
     }
 
-    setSections(groupArticlesByCategory(authorId, getBundledSummaries(authorId)));
+    setSections(groupArticlesByCategory(authorId, getOfflineArticleSummaries(authorId)));
     load();
   }, [authorId, load]);
 
@@ -74,9 +78,9 @@ export function useArticle(articleId: string | undefined) {
       return;
     }
 
-    const bundled = getBundledArticle(articleId);
-    if (bundled) {
-      setArticle(bundled);
+    const local = await resolveArticleLocal(articleId);
+    if (local) {
+      setArticle(local);
       setLoading(false);
       setError(null);
     } else {
@@ -84,12 +88,23 @@ export function useArticle(articleId: string | undefined) {
       setError(null);
     }
 
+    if (!(await shouldSyncFromNetwork())) {
+      if (!local) {
+        setError('Article not found');
+        setArticle(null);
+        setLoading(false);
+      }
+      return;
+    }
+
+    clearSyncBackoff();
+
     try {
       const result = await fetchArticleById(articleId);
       if (result) {
         setArticle(result);
         setError(null);
-      } else if (!bundled) {
+      } else if (!local) {
         setError('Article not found');
         setArticle(null);
       }
@@ -99,7 +114,7 @@ export function useArticle(articleId: string | undefined) {
         return;
       }
       devWarn('[read:useArticle]', articleId, err);
-      if (!bundled) {
+      if (!local) {
         setError(message);
         setArticle(null);
       }

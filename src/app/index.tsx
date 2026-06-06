@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AccountProfileButton } from '@/components/account-profile-button';
+import { AccountProfileSheet } from '@/components/account-profile-sheet';
 import { AppLogo } from '@/components/app-logo';
 import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
 import { DailyPickCard } from '@/components/home/daily-pick-card';
@@ -36,6 +38,7 @@ export default function HomeScreen() {
     remindersAvailable,
   } = useReadingReminders(dailyPick);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const hasAuthors =
     sections.some((section) => section.authors.length > 0) || unassignedAuthors.length > 0;
@@ -44,13 +47,19 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
-      <Pressable
-        style={styles.header}
-        onLongPress={() => setSettingsOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Home. Long press for reading settings">
-        <AppLogo size={56} />
-      </Pressable>
+      <View style={styles.header}>
+        <View style={styles.headerSide} />
+        <Pressable
+          style={styles.headerCenter}
+          onLongPress={() => setSettingsOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Home. Long press for reading settings">
+          <AppLogo size={56} />
+        </Pressable>
+        <View style={styles.headerSide}>
+          <AccountProfileButton onPress={() => setProfileOpen(true)} />
+        </View>
+      </View>
 
       {showLoadingScreen ? (
         <View style={styles.loaderCenter}>
@@ -128,6 +137,8 @@ export default function HomeScreen() {
         </ScrollView>
       )}
 
+      <AccountProfileSheet visible={profileOpen} onClose={() => setProfileOpen(false)} />
+
       <ReadingSettingsSheet
         visible={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -152,10 +163,20 @@ const styles = StyleSheet.create({
     paddingBottom: ReadingLayout.insetBottom,
   },
   header: {
+    flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: ReadingLayout.insetX,
     paddingTop: 8,
     paddingBottom: 16,
+  },
+  headerSide: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   loaderCenter: {
     flex: 1,

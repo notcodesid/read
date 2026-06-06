@@ -9,8 +9,10 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.notcodesid.read",
+      "usesAppleSignIn": true,
       "buildNumber": "1",
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Read connects to your Mac on the local network to load updates while developing.",
         "BonjourServices": [
@@ -38,6 +40,7 @@
       "backgroundColor": "#faf8f5"
     },
     "plugins": [
+      "expo-apple-authentication",
       "expo-router",
       [
         "expo-splash-screen",
@@ -57,7 +60,9 @@
         {
           "defaultChannel": "reading-reminders"
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

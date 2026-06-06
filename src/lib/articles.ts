@@ -7,9 +7,10 @@ import {
   saveArticleCache,
   saveArticleSummariesCache,
 } from '@/lib/article-cache';
+import { markSyncFailure, shouldSyncFromNetwork } from '@/lib/connectivity';
 import { decodeHtml } from '@/lib/decode-html';
 import { devLog, devWarn } from '@/lib/log';
-import { fetchWithTimeout, getSupabaseConfig, supabase } from '@/lib/supabase';
+import { getSupabaseConfig, supabase } from '@/lib/supabase';
 import type { Article, ArticleSection, ArticleSummary } from '@/types/article';
 
 const LOG = '[read:articles]';
@@ -91,7 +92,15 @@ export function getBundledArticle(id: string): Article | null {
   return bundledArticleById.get(id) ?? null;
 }
 
-async function fetchSummariesViaRest(
+export async function resolveArticleLocal(id: string): Promise<Article | null> {
+  const bundled = getBundledArticle(id);
+  if (bundled) {
+    return bundled;
+  }
+  return loadArticleCache(id);
+}
+
+async function fetchSummariesViaClient(
   authorId?: string,
   signal?: AbortSignal,
 ): Promise<ArticleSummary[]> {
@@ -100,71 +109,64 @@ async function fetchSummariesViaRest(
     throw new Error('Missing Supabase env vars');
   }
 
-  let endpoint =
-    `${url}/rest/v1/articles?select=id,title,author_id,category` +
-    '&order=category.asc&order=title.asc';
-
-  if (authorId) {
-    endpoint += `&author_id=eq.${encodeURIComponent(authorId)}`;
-  }
-
-  devLog(LOG, 'REST fetch start', { authorId });
+  devLog(LOG, 'client fetch start', { authorId });
   const started = Date.now();
 
-  const response = await fetchWithTimeout(endpoint, {
-    signal,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      Accept: 'application/json',
-    },
-  });
+  let query = supabase
+    .from('articles')
+    .select('id,title,author_id,category')
+    .order('category', { ascending: true })
+    .order('title', { ascending: true });
 
-  const text = await response.text();
-  devLog(LOG, 'REST fetch done', {
-    ms: Date.now() - started,
-    status: response.status,
-    bytes: text.length,
-  });
-
-  if (!response.ok) {
-    throw new Error(`REST fetch failed: ${response.status} ${text.slice(0, 200)}`);
+  if (authorId) {
+    query = query.eq('author_id', authorId);
   }
 
-  const rows = JSON.parse(text) as SummaryRow[];
-  return rows.map(mapSummary);
+  if (signal) {
+    query = query.abortSignal(signal);
+  }
+
+  const { data, error } = await query;
+  devLog(LOG, 'client fetch done', {
+    ms: Date.now() - started,
+    error: error?.message ?? null,
+    rows: data?.length ?? 0,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as SummaryRow[]).map(mapSummary);
 }
 
-async function fetchArticleViaRest(id: string, signal?: AbortSignal): Promise<Article | null> {
+async function fetchArticleViaClient(id: string, signal?: AbortSignal): Promise<Article | null> {
   const { url, key } = getSupabaseConfig();
   if (!url || !key) {
     throw new Error('Missing Supabase env vars');
   }
 
-  const endpoint =
-    `${url}/rest/v1/articles?select=id,title,author_id,category,source,author,source_url,hero_image_url,paragraphs,added_at` +
-    `&id=eq.${encodeURIComponent(id)}`;
+  let query = supabase
+    .from('articles')
+    .select(
+      'id, title, author_id, category, source, author, source_url, hero_image_url, paragraphs, added_at',
+    )
+    .eq('id', id);
 
-  const response = await fetchWithTimeout(endpoint, {
-    signal,
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      Accept: 'application/json',
-    },
-  });
-
-  const text = await response.text();
-  if (!response.ok) {
-    throw new Error(`Article REST failed: ${response.status} ${text.slice(0, 200)}`);
+  if (signal) {
+    query = query.abortSignal(signal);
   }
 
-  const rows = JSON.parse(text) as ArticleRow[];
-  if (!rows[0]) {
+  const { data, error } = await query.maybeSingle();
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
     return null;
   }
 
-  return mapRow(rows[0]);
+  return mapRow(data as ArticleRow);
 }
 
 export async function fetchArticleSummaries(
@@ -173,6 +175,12 @@ export async function fetchArticleSummaries(
 ): Promise<ArticlesLoadResult> {
   devLog(LOG, 'fetchArticleSummaries start', { authorId });
 
+  const bundled = loadBundledSummaries(authorId);
+  if (!(await shouldSyncFromNetwork())) {
+    devLog(LOG, 'fetchArticleSummaries done (bundled, offline)', { total: bundled.length });
+    return { articles: bundled, source: 'bundled' };
+  }
+
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     if (signal?.aborted) {
       throw new Error('Fetch canceled');
@@ -180,7 +188,7 @@ export async function fetchArticleSummaries(
 
     try {
       devLog(LOG, `network attempt ${attempt}/${RETRY_ATTEMPTS}`);
-      const articles = await fetchSummariesViaRest(authorId, signal);
+      const articles = await fetchSummariesViaClient(authorId, signal);
       if (!authorId) {
         await saveArticleSummariesCache(articles);
       }
@@ -189,6 +197,7 @@ export async function fetchArticleSummaries(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       devWarn(LOG, `attempt ${attempt} failed`, message);
+      markSyncFailure();
       if (attempt < RETRY_ATTEMPTS) {
         await sleep(attempt * 1500);
       }
@@ -203,7 +212,6 @@ export async function fetchArticleSummaries(
     }
   }
 
-  const bundled = loadBundledSummaries(authorId);
   devLog(LOG, 'fetchArticleSummaries done (bundled)', { total: bundled.length });
   return { articles: bundled, source: 'bundled' };
 }
@@ -232,6 +240,12 @@ export function groupArticlesByCategory(
 export async function fetchArticleById(id: string, signal?: AbortSignal): Promise<Article | null> {
   devLog(LOG, 'fetchArticleById', id);
 
+  const local = await resolveArticleLocal(id);
+  if (!(await shouldSyncFromNetwork())) {
+    devLog(LOG, 'fetchArticleById done (local, offline)', { id, found: Boolean(local) });
+    return local;
+  }
+
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     if (signal?.aborted) {
       throw new Error('Fetch canceled');
@@ -239,8 +253,8 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
 
     try {
       const started = Date.now();
-      const article = await fetchArticleViaRest(id, signal);
-      devLog(LOG, 'fetchArticleById result (REST)', {
+      const article = await fetchArticleViaClient(id, signal);
+      devLog(LOG, 'fetchArticleById result (client)', {
         ms: Date.now() - started,
         id,
         found: Boolean(article),
@@ -251,51 +265,16 @@ export async function fetchArticleById(id: string, signal?: AbortSignal): Promis
       return article;
     } catch (err) {
       devWarn(LOG, `fetchArticleById attempt ${attempt} failed`, err);
+      markSyncFailure();
       if (attempt < RETRY_ATTEMPTS) {
         await sleep(attempt * 1500);
       }
     }
   }
 
-  try {
-    const started = Date.now();
-    const { data, error } = await supabase
-      .from('articles')
-      .select(
-        'id, title, author_id, category, source, author, source_url, hero_image_url, paragraphs, added_at',
-      )
-      .eq('id', id)
-      .maybeSingle();
-
-    devLog(LOG, 'fetchArticleById result (client)', {
-      ms: Date.now() - started,
-      error: error?.message ?? null,
-      found: Boolean(data),
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (data) {
-      const article = mapRow(data as ArticleRow);
-      await saveArticleCache(article);
-      return article;
-    }
-  } catch (err) {
-    devWarn(LOG, 'fetchArticleById client fallback failed', err);
-  }
-
-  const cached = await loadArticleCache(id);
-  if (cached) {
-    devLog(LOG, 'fetchArticleById done (cache)', id);
-    return cached;
-  }
-
-  const bundled = getBundledArticle(id);
-  if (bundled) {
-    devLog(LOG, 'fetchArticleById done (bundled)', id);
-    return bundled;
+  if (local) {
+    devLog(LOG, 'fetchArticleById done (local fallback)', id);
+    return local;
   }
 
   return null;
