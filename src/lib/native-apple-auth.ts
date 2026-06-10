@@ -6,6 +6,15 @@ import {
   activateAppleUserLibrary,
   deactivateAppleUserLibrary,
 } from '@/lib/apple-reading-archive';
+import { readAppleIdentityClaims } from '@/lib/apple-identity-token';
+import {
+  enrichAppleSession,
+  loadStoredAppleProfile,
+  mergeAppleProfileFields,
+  persistAppleProfileFields,
+} from '@/lib/apple-profile-storage';
+import { pickProfilePhoto } from '@/lib/pick-profile-photo';
+import { saveProfilePhotoFile } from '@/lib/profile-photo';
 import {
   clearAppleSession,
   loadAppleSession,
@@ -33,6 +42,9 @@ export async function isAppleSignInAvailable(): Promise<boolean> {
 }
 
 const LOG = '[read:apple-auth]';
+/** AuthKit often returns -7084 / REVOKED immediately after sign-in; wait before trusting it. */
+const CREDENTIAL_GRACE_MS = 120_000;
+const CREDENTIAL_RETRY_MS = 600;
 
 function isUserCancellation(error: unknown): boolean {
   return (
@@ -77,70 +89,195 @@ function messageFromAppleError(error: unknown): string {
   return 'Sign in with Apple failed. Try a physical iPhone if you are on Simulator.';
 }
 
-function readFullName(
+export function readAppleFullName(
   fullName: AppleAuthentication.AppleAuthenticationFullName | null,
 ): string | undefined {
   if (!fullName) {
     return undefined;
   }
+
   const formatted = AppleAuthentication.formatFullName(fullName, 'default').trim();
-  return formatted.length > 0 ? formatted : undefined;
+  if (formatted.length > 0) {
+    return formatted;
+  }
+
+  if (fullName.nickname?.trim()) {
+    return fullName.nickname.trim();
+  }
+
+  const manual = [fullName.givenName, fullName.middleName, fullName.familyName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return manual.length > 0 ? manual : undefined;
+}
+
+/** Persist Apple-provided fields immediately — Apple only sends these once. */
+async function captureAppleProfileFromCredential(
+  credential: AppleAuthentication.AppleAuthenticationCredential,
+): Promise<void> {
+  const fullName = readAppleFullName(credential.fullName);
+  const email = credential.email ?? readAppleIdentityClaims(credential.identityToken)?.email;
+
+  if (!fullName && !email) {
+    return;
+  }
+
+  await persistAppleProfileFields(credential.user, {
+    fullName,
+    email,
+  });
+
+  devLog(LOG, 'Captured Apple profile fields', {
+    hasName: Boolean(fullName),
+    hasEmail: Boolean(email),
+  });
+}
+
+async function buildSessionFromCredential(
+  credential: AppleAuthentication.AppleAuthenticationCredential,
+  existing: AppleUserSession | null,
+): Promise<AppleUserSession> {
+  await captureAppleProfileFromCredential(credential);
+
+  const stored = await loadStoredAppleProfile(credential.user);
+  const jwtClaims = readAppleIdentityClaims(credential.identityToken);
+  const fromCredential = sessionFromCredential(credential, existing);
+  const merged = mergeAppleProfileFields(
+    credential.user,
+    fromCredential,
+    jwtClaims?.email ? { email: jwtClaims.email } : null,
+    stored,
+  );
+
+  return {
+    user: credential.user,
+    email: merged.email,
+    fullName: merged.fullName,
+    authenticatedAt: Date.now(),
+  };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTemporaryCredentialError(error: unknown): boolean {
+  const errorCode =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: number }).code
+      : undefined;
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  return (
+    errorCode === -7084 ||
+    errorCode === -7082 ||
+    errorMessage.includes('-7084') ||
+    errorMessage.includes('-7082')
+  );
 }
 
 /**
  * Apple only sends fullName and email on the first successful authorization.
- * Merge with any values already stored for this user identifier.
+ * Merge only with a prior session for the same user identifier.
  */
-function sessionFromCredential(
-  credential: AppleAuthentication.AppleAuthenticationCredential,
+export function sessionFromCredential(
+  credential: Pick<
+    AppleAuthentication.AppleAuthenticationCredential,
+    'user' | 'email' | 'fullName'
+  >,
   existing: AppleUserSession | null,
 ): AppleUserSession {
+  const prior = existing?.user === credential.user ? existing : null;
+
   return {
     user: credential.user,
-    email: credential.email ?? existing?.email,
-    fullName: readFullName(credential.fullName) ?? existing?.fullName,
+    email: credential.email ?? prior?.email,
+    fullName: readAppleFullName(credential.fullName) ?? prior?.fullName,
   };
+}
+
+function isWithinCredentialGracePeriod(authenticatedAt?: number): boolean {
+  return (
+    typeof authenticatedAt === 'number' &&
+    Date.now() - authenticatedAt < CREDENTIAL_GRACE_MS
+  );
 }
 
 /**
  * Step 4 from Apple’s doc: check credential state for the stored user identifier.
  * @see ASAuthorizationAppleIDProvider.getCredentialState(forUserID:)
  */
-export async function isStoredAppleCredentialValid(user: string): Promise<boolean> {
-  try {
-    const state = await AppleAuthentication.getCredentialStateAsync(user);
-
-    if (state === AppleAuthentication.AppleAuthenticationCredentialState.AUTHORIZED) {
-      return true;
-    }
-
-    return false;
-  } catch (error) {
-    // Check for specific AuthKit error codes that indicate temporary issues
-    const errorCode = typeof error === 'object' && error !== null && 'code' in error
-      ? (error as { code?: number }).code
-      : undefined;
-
-    // Also check error message string for error codes
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const hasTempError = errorMessage.includes('-7084') || errorMessage.includes('-7082');
-
-    // Error -7084: Credential not immediately available after sign-in (temporary)
-    // Error -7082: Authorization not found (temporary during sign-in flow)
-    if (errorCode === -7084 || errorCode === -7082 || hasTempError) {
-      devLog(LOG, 'Credential state check returned temporary error, allowing session', { errorCode, hasTempError });
-      return true;
-    }
-
-    // Only suppress other errors on Simulator
-    if (!Device.isDevice) {
-      devLog(LOG, 'Simulator credential check failed, allowing session', error);
-      return true;
-    }
-    // On real devices, treat other errors as invalid credentials
-    devLog(LOG, 'Credential check failed on device', error);
-    return false;
+export async function isStoredAppleCredentialValid(
+  user: string,
+  authenticatedAt?: number,
+): Promise<boolean> {
+  if (isWithinCredentialGracePeriod(authenticatedAt)) {
+    devLog(LOG, 'Skipping credential check during post-sign-in grace period');
+    return true;
   }
+
+  const { AppleAuthenticationCredentialState: State } = AppleAuthentication;
+  const maxAttempts = Device.isDevice ? 3 : 5;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const state = await AppleAuthentication.getCredentialStateAsync(user);
+
+      if (state === State.AUTHORIZED || state === State.TRANSFERRED) {
+        return true;
+      }
+
+      if (state === State.REVOKED || state === State.NOT_FOUND) {
+        if (!Device.isDevice) {
+          devLog(LOG, 'Simulator reported invalid credential state; trusting local session', {
+            state,
+            attempt,
+          });
+          if (attempt < maxAttempts - 1) {
+            await sleep(CREDENTIAL_RETRY_MS * (attempt + 1));
+            continue;
+          }
+          return true;
+        }
+
+        if (attempt < maxAttempts - 1) {
+          devLog(LOG, 'Credential state not ready yet; retrying', { state, attempt });
+          await sleep(CREDENTIAL_RETRY_MS * (attempt + 1));
+          continue;
+        }
+
+        devLog(LOG, 'Credential no longer valid', { state });
+        return false;
+      }
+
+      return false;
+    } catch (error) {
+      if (isTemporaryCredentialError(error)) {
+        devLog(LOG, 'Temporary credential check error', { attempt });
+        if (attempt < maxAttempts - 1) {
+          await sleep(CREDENTIAL_RETRY_MS * (attempt + 1));
+          continue;
+        }
+        return true;
+      }
+
+      if (!Device.isDevice) {
+        devLog(LOG, 'Simulator credential check failed, allowing session', error);
+        return true;
+      }
+
+      if (attempt < maxAttempts - 1) {
+        await sleep(CREDENTIAL_RETRY_MS * (attempt + 1));
+        continue;
+      }
+
+      devLog(LOG, 'Credential check failed on device', error);
+      return false;
+    }
+  }
+
+  return !Device.isDevice;
 }
 
 /** Step 2–3: perform authorization and persist the credential. */
@@ -167,9 +304,20 @@ export async function signInWithApple(): Promise<AppleUserSession> {
     throw new Error('Apple did not return a user identifier.');
   }
 
-  const session = sessionFromCredential(credential, existing);
-  await saveAppleSession(session);
-  await activateAppleUserLibrary(session.user);
+  const session = await buildSessionFromCredential(credential, existing);
+
+  try {
+    await activateAppleUserLibrary(session.user);
+    await saveAppleSession(session);
+  } catch (error) {
+    try {
+      await deactivateAppleUserLibrary(session.user);
+    } catch (rollbackError) {
+      devLog(LOG, 'Failed to roll back library swap after sign-in error', rollbackError);
+    }
+    throw error instanceof Error ? error : new Error('Could not finish signing in.');
+  }
+
   return session;
 }
 
@@ -182,20 +330,68 @@ export async function signOutFromApple(): Promise<void> {
   await clearAppleSession();
 }
 
-/** Restore session on launch after validating credential state with Apple. */
+/**
+ * Restore session on launch after validating credential state with Apple.
+ * AsyncStorage already holds the active library for a signed-in user — only swap
+ * archives during explicit sign-in / sign-out transitions.
+ */
 export async function restoreAppleSession(): Promise<AppleUserSession | null> {
   const session = await loadAppleSession();
   if (!session) {
     return null;
   }
 
-  if (!(await isStoredAppleCredentialValid(session.user))) {
+  if (!(await isStoredAppleCredentialValid(session.user, session.authenticatedAt))) {
     await clearAppleSession();
     return null;
   }
 
-  await activateAppleUserLibrary(session.user);
-  return session;
+  const enriched = await enrichAppleSession(session);
+  if (
+    enriched.fullName !== session.fullName ||
+    enriched.email !== session.email ||
+    enriched.photoUri !== session.photoUri ||
+    enriched.photoUpdatedAt !== session.photoUpdatedAt
+  ) {
+    await saveAppleSession(enriched);
+  }
+
+  return enriched;
+}
+
+export async function setAppleProfilePhoto(): Promise<AppleUserSession> {
+  const session = await loadAppleSession();
+  if (!session) {
+    throw new Error('Not signed in.');
+  }
+
+  const pickedUri = await pickProfilePhoto();
+  if (!pickedUri) {
+    return enrichAppleSession(session);
+  }
+
+  const photoUri = await saveProfilePhotoFile(session.user, pickedUri);
+  const photoUpdatedAt = Date.now();
+  await persistAppleProfileFields(session.user, { photoUri, photoUpdatedAt });
+
+  const enriched: AppleUserSession = {
+    ...(await enrichAppleSession(session)),
+    photoUri,
+    photoUpdatedAt,
+  };
+  await saveAppleSession(enriched);
+  return enriched;
+}
+
+export async function reloadAppleSession(): Promise<AppleUserSession | null> {
+  const session = await loadAppleSession();
+  if (!session) {
+    return null;
+  }
+
+  const enriched = await enrichAppleSession(session);
+  await saveAppleSession(enriched);
+  return enriched;
 }
 
 /** Step 5: observe credential revocation from Settings. */

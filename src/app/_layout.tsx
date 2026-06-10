@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthGate } from '@/components/auth-gate';
+import { AuthReadingSync } from '@/components/auth-reading-sync';
 import { LaunchSplash } from '@/components/launch-splash';
 import { AuthProvider } from '@/contexts/auth-context';
 import { ReadingPreferencesProvider, useReadingPreferences } from '@/contexts/reading-preferences-context';
@@ -45,6 +46,7 @@ function NavigationRoot() {
     <ThemeProvider value={navTheme}>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         <AuthGate>
+          <AuthReadingSync />
           <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
             <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
             <Stack.Screen name="index" />
@@ -54,6 +56,10 @@ function NavigationRoot() {
           />
           <Stack.Screen
             name="read/[id]"
+            options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
+          />
+          <Stack.Screen
+            name="profile"
             options={{ gestureEnabled: true, fullScreenGestureEnabled: true }}
           />
           </Stack>

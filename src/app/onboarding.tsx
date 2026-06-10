@@ -1,5 +1,4 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
-import * as Device from 'expo-device';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -10,22 +9,12 @@ import { ReadingLayout } from '@/constants/reading';
 
 export default function OnboardingScreen() {
   const theme = useReadingPreferences().theme;
-  const { reloadFromStorage } = useReadingPreferences();
   const { appleSignInAvailable, busy, error, signInWithApple, clearError } = useAuth();
-  const onSimulator = !Device.isDevice;
   const signingIn = busy;
 
   const handleSignUp = () => {
     clearError();
-    void (async () => {
-      try {
-        await signInWithApple();
-        await reloadFromStorage();
-      } catch {
-        // Error is already handled by auth context
-        // Don't reload storage if sign-in failed
-      }
-    })();
+    void signInWithApple();
   };
 
   const canShowAppleButton = Platform.OS === 'ios' && appleSignInAvailable;
@@ -36,15 +25,8 @@ export default function OnboardingScreen() {
         <AppLogo size={88} />
         <Text style={[styles.title, { color: theme.text }]}>Welcome to Read</Text>
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          Sign up with Apple to start reading. Your library stays private on this device.
+          Sign up with Apple to start reading.
         </Text>
-
-        {onSimulator ? (
-          <Text style={[styles.hint, { color: theme.textSecondary }]}>
-            Simulator: open Settings → Apple Account, sign in there first, then tap Sign up
-            with Apple below.
-          </Text>
-        ) : null}
 
         {signingIn ? (
           <View style={styles.pending}>
@@ -61,9 +43,7 @@ export default function OnboardingScreen() {
           />
         ) : (
           <Text style={[styles.hint, { color: theme.textSecondary }]}>
-            {Platform.OS === 'ios'
-              ? 'Sign up with Apple is not available on this device. Rebuild with bun run ios.'
-              : 'Sign up with Apple is available on iOS.'}
+            Sign up with Apple is available on iOS.
           </Text>
         )}
 

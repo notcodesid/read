@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AccountProfileButton } from '@/components/account-profile-button';
-import { AccountProfileSheet } from '@/components/account-profile-sheet';
 import { AppLogo } from '@/components/app-logo';
 import { AuthorGroupCarousel } from '@/components/home/author-group-carousel';
 import { DailyPickCard } from '@/components/home/daily-pick-card';
@@ -38,7 +37,6 @@ export default function HomeScreen() {
     remindersAvailable,
   } = useReadingReminders(dailyPick);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
 
   const hasAuthors =
     sections.some((section) => section.authors.length > 0) || unassignedAuthors.length > 0;
@@ -57,7 +55,7 @@ export default function HomeScreen() {
           <AppLogo size={56} />
         </Pressable>
         <View style={styles.headerSide}>
-          <AccountProfileButton onPress={() => setProfileOpen(true)} />
+          <AccountProfileButton />
         </View>
       </View>
 
@@ -136,8 +134,6 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       )}
-
-      <AccountProfileSheet visible={profileOpen} onClose={() => setProfileOpen(false)} />
 
       <ReadingSettingsSheet
         visible={settingsOpen}

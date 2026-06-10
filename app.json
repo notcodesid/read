@@ -15,6 +15,8 @@
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Read connects to your Mac on the local network to load updates while developing.",
+        "NSPhotoLibraryUsageDescription": "Read uses your photo library so you can choose a profile picture.",
+        "NSCameraUsageDescription": "Read uses your camera so you can take a profile picture.",
         "BonjourServices": [
           "_expo._tcp"
         ]
@@ -62,7 +64,14 @@
         }
       ],
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Read uses your photo library so you can choose a profile picture.",
+          "cameraPermission": "Read uses your camera so you can take a profile picture."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

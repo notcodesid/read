@@ -47,6 +47,14 @@ export async function saveHighlights(articleId: string, highlights: Highlight[])
   await AsyncStorage.setItem(storageKey(articleId), JSON.stringify(highlights));
 }
 
+export async function clearAllStoredHighlights(): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys();
+  const highlightKeys = keys.filter((key) => key.startsWith(STORAGE_PREFIX));
+  if (highlightKeys.length > 0) {
+    await AsyncStorage.multiRemove(highlightKeys);
+  }
+}
+
 export async function loadAllHighlights(): Promise<Record<string, Highlight[]>> {
   const keys = await AsyncStorage.getAllKeys();
   const prefix = STORAGE_PREFIX;

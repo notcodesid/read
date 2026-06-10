@@ -13,6 +13,7 @@ import {
   isAppleSignInAvailable,
   onAppleCredentialRevoked,
   restoreAppleSession,
+  setAppleProfilePhoto,
   signInWithApple,
   signOutFromApple,
 } from '@/lib/native-apple-auth';
@@ -24,9 +25,11 @@ type AuthContextValue = {
   isSignedIn: boolean;
   appleSignInAvailable: boolean;
   busy: boolean;
+  photoBusy: boolean;
   error: string | null;
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
+  setProfilePhoto: () => Promise<void>;
   clearError: () => void;
 };
 
@@ -37,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AppleUserSession | null>(null);
   const [appleSignInAvailable, setAppleSignInAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const signOut = useCallback(async () => {
@@ -81,6 +85,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const setProfilePhoto = useCallback(async () => {
+    if (photoBusy) {
+      return;
+    }
+    setPhotoBusy(true);
+    setError(null);
+    try {
+      setSession(await setAppleProfilePhoto());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update profile photo.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  }, [photoBusy]);
+
   const handleSignIn = useCallback(async () => {
     if (busy) {
       return;
@@ -106,12 +125,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isSignedIn: Boolean(session),
       appleSignInAvailable,
       busy,
+      photoBusy,
       error,
       signInWithApple: handleSignIn,
       signOut,
+      setProfilePhoto,
       clearError: () => setError(null),
     }),
-    [ready, session, appleSignInAvailable, busy, error, handleSignIn, signOut],
+    [ready, session, appleSignInAvailable, busy, photoBusy, error, handleSignIn, signOut, setProfilePhoto],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,7 +1,11 @@
 import * as SecureStore from 'expo-secure-store';
 
 import { loadBookmarks, saveBookmarks } from '@/lib/bookmarks-storage';
-import { loadAllHighlights, saveHighlights } from '@/lib/highlights-storage';
+import {
+  clearAllStoredHighlights,
+  loadAllHighlights,
+  saveHighlights,
+} from '@/lib/highlights-storage';
 import {
   loadReadingPreferences,
   loadReadingStats,
@@ -59,14 +63,15 @@ export async function loadLocalReadingSnapshot(): Promise<ReadingSnapshotPayload
 }
 
 export async function applyLocalReadingSnapshot(snapshot: ReadingSnapshotPayload): Promise<void> {
+  await clearAllStoredHighlights();
   await Promise.all([
     saveReadingProgress(snapshot.progress),
     saveBookmarks(snapshot.bookmarks),
+    saveReadingPreferences(snapshot.preferences),
+    saveReadingStats(snapshot.stats),
     ...Object.entries(snapshot.highlights).map(([articleId, items]) =>
       saveHighlights(articleId, items),
     ),
-    saveReadingPreferences(snapshot.preferences),
-    saveReadingStats(snapshot.stats),
   ]);
 }
 
