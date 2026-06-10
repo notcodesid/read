@@ -46,17 +46,15 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <View style={styles.headerSide} />
         <Pressable
-          style={styles.headerCenter}
           onLongPress={() => setSettingsOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="Home. Long press for reading settings">
-          <AppLogo size={56} />
+          accessibilityLabel="Home. Long press for reading settings"
+          hitSlop={6}
+          style={({ pressed }) => [styles.headerIcon, pressed && styles.pressed]}>
+          <AppLogo size={ReadingLayout.headerIconSize} />
         </Pressable>
-        <View style={styles.headerSide}>
-          <AccountProfileButton />
-        </View>
+        <AccountProfileButton />
       </View>
 
       {showLoadingScreen ? (
@@ -73,6 +71,7 @@ export default function HomeScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
+          contentInsetAdjustmentBehavior="never"
           showsVerticalScrollIndicator={false}>
           {error ? (
             <Pressable onPress={refresh} accessibilityRole="button" style={styles.headerStatus}>
@@ -161,18 +160,19 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: ReadingLayout.insetX,
-    paddingTop: 8,
-    paddingBottom: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
-  headerSide: {
-    width: 36,
+  headerIcon: {
+    width: ReadingLayout.headerIconSize,
+    height: ReadingLayout.headerIconSize,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
+  pressed: {
+    opacity: 0.7,
   },
   loaderCenter: {
     flex: 1,

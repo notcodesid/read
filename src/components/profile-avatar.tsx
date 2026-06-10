@@ -3,15 +3,20 @@ import { SymbolView } from 'expo-symbols';
 import { type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ReadingLayout } from '@/constants/reading';
+import { useTheme } from '@/hooks/use-theme';
 import { avatarColorForUser } from '@/lib/profile-avatar-color';
 import { profileInitials } from '@/lib/profile-display';
-import { useTheme } from '@/hooks/use-theme';
 
 type ProfileAvatarSize = 'header' | 'profile';
 
 const SIZES: Record<ProfileAvatarSize, { diameter: number; fontSize: number; symbolSize: number }> =
   {
-    header: { diameter: 36, fontSize: 13, symbolSize: 22 },
+    header: {
+      diameter: ReadingLayout.headerIconSize,
+      fontSize: 13,
+      symbolSize: 22,
+    },
     profile: { diameter: 88, fontSize: 32, symbolSize: 52 },
   };
 

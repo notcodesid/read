@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { ProfileAvatar } from '@/components/profile-avatar';
+import { ReadingLayout } from '@/constants/reading';
 import { useAuth } from '@/contexts/auth-context';
 import { profileDisplayName } from '@/lib/profile-display';
 
@@ -34,6 +35,8 @@ export function AccountProfileButton() {
 
 const styles = StyleSheet.create({
   button: {
+    width: ReadingLayout.headerIconSize,
+    height: ReadingLayout.headerIconSize,
     alignItems: 'center',
     justifyContent: 'center',
   },

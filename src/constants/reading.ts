@@ -47,6 +47,7 @@ export const ReadingLayout = {
   insetTop: 20,
   insetBottom: 48,
   maxWidth: 580,
+  headerIconSize: 36,
 } as const;
 
 /** Vertical 3:4 cover tiles (Kindle library carousel). */
